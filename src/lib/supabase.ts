@@ -1,9 +1,7 @@
 import { createClient as createBrowserSupabaseClient } from "./supabase/client";
-import { createClient as createServerSupabaseClient } from "./supabase/server";
-import { createAdminClient as createAdminSupabaseClient } from "./supabase/admin";
 import { SupabaseClient } from "@supabase/supabase-js";
 
-export { createBrowserSupabaseClient, createServerSupabaseClient, createAdminSupabaseClient };
+export { createBrowserSupabaseClient };
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
