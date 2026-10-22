@@ -16,8 +16,14 @@ export default function WishlistPage() {
   const handleMoveToBag = async (productId: string) => {
     const product = await getProductById(productId);
     if (product) {
-      addItem(product, product.sizes[0] || "M", product.colors[0]?.name || "Standard", 1);
-      removeFromWishlist(productId);
+      // Find first variant with positive stock
+      const inStockVariant = product.variants.find((v) => Number(v.stock) > 0);
+      const targetSize = inStockVariant?.size || product.sizes[0] || "M";
+      const targetColor = inStockVariant?.color || product.colors[0]?.name || "Standard";
+      const success = addItem(product, targetSize, targetColor, 1);
+      if (success) {
+        removeFromWishlist(productId);
+      }
     }
   };
 

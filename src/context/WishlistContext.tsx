@@ -99,7 +99,7 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
         category: product.category,
         badge: product.badge,
         addedAt: new Date().toISOString(),
-        isAvailable: product.status === "published",
+        isAvailable: product.status ? product.status === "published" : true,
       };
       return [...prev, newItem];
     });
