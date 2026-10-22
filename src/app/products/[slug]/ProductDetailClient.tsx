@@ -41,8 +41,21 @@ export function ProductDetailClient({ product, relatedProducts }: ProductDetailC
 
   // State
   const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const [selectedColor, setSelectedColor] = useState(product.colors[0]?.name || "");
-  const [selectedSize, setSelectedSize] = useState(product.sizes[0] || "M");
+
+  // Find first color that has active inventory, or fallback to first color
+  const initialColor =
+    product.colors.find((c) =>
+      product.variants.some((v) => v.color.toLowerCase() === c.name.toLowerCase() && Number(v.stock) > 0)
+    )?.name || product.colors[0]?.name || "";
+
+  // Find first size that has active inventory for the initial color
+  const initialSize =
+    product.variants.find((v) => v.color.toLowerCase() === initialColor.toLowerCase() && Number(v.stock) > 0)?.size ||
+    product.sizes[0] ||
+    "M";
+
+  const [selectedColor, setSelectedColor] = useState(initialColor);
+  const [selectedSize, setSelectedSize] = useState(initialSize);
   const [isSizeGuideOpen, setIsSizeGuideOpen] = useState(false);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [pincode, setPincode] = useState("400050");
@@ -74,15 +87,6 @@ export function ProductDetailClient({ product, relatedProducts }: ProductDetailC
     setDeliveryInfo(checkPincodeDelivery(pincode));
   };
 
-  const handleAddToBag = () => {
-    addItem(product, selectedSize, selectedColor, 1);
-  };
-
-  const handleInstantCheckout = () => {
-    addItem(product, selectedSize, selectedColor, 1);
-    router.push("/checkout");
-  };
-
   // Find active variant stock (zero if no matching variant)
   const activeVariant = product.variants.find(
     (v) =>
@@ -90,6 +94,40 @@ export function ProductDetailClient({ product, relatedProducts }: ProductDetailC
       v.color.toLowerCase() === selectedColor.toLowerCase()
   );
   const stockCount = activeVariant ? Number(activeVariant.stock) : 0;
+  const isVariantInStock = stockCount > 0;
+  const totalStock = product.variants.reduce((acc, v) => acc + (Number(v.stock) || 0), 0);
+  const isEntireProductOutOfStock = product.variants.length > 0 && totalStock === 0;
+
+  const handleColorChange = (colorName: string) => {
+    setSelectedColor(colorName);
+    const currentSizeHasStock = product.variants.some(
+      (v) =>
+        v.color.toLowerCase() === colorName.toLowerCase() &&
+        v.size.toLowerCase() === selectedSize.toLowerCase() &&
+        Number(v.stock) > 0
+    );
+    if (!currentSizeHasStock) {
+      const firstAvailable = product.variants.find(
+        (v) => v.color.toLowerCase() === colorName.toLowerCase() && Number(v.stock) > 0
+      );
+      if (firstAvailable) {
+        setSelectedSize(firstAvailable.size);
+      }
+    }
+  };
+
+  const handleAddToBag = () => {
+    if (!isVariantInStock) return;
+    addItem(product, selectedSize, selectedColor, 1);
+  };
+
+  const handleInstantCheckout = () => {
+    if (!isVariantInStock) return;
+    const added = addItem(product, selectedSize, selectedColor, 1);
+    if (added) {
+      router.push("/checkout");
+    }
+  };
 
   return (
     <div className="w-full bg-surface pb-24">
@@ -298,17 +336,21 @@ export function ProductDetailClient({ product, relatedProducts }: ProductDetailC
               <div className="flex items-center gap-3">
                 {product.colors.map((color) => {
                   const isSelected = selectedColor === color.name;
+                  const colorHasStock = product.variants.some(
+                    (v) => v.color.toLowerCase() === color.name.toLowerCase() && Number(v.stock) > 0
+                  );
                   return (
                     <button
                       key={color.name}
                       type="button"
-                      onClick={() => setSelectedColor(color.name)}
-                      aria-label={`Select ${color.name}`}
+                      onClick={() => handleColorChange(color.name)}
+                      aria-label={`Select ${color.name}${colorHasStock ? "" : " (Sold Out)"}`}
+                      title={colorHasStock ? color.name : `${color.name} (Sold Out)`}
                       className={`relative w-9 h-9 rounded-full shadow-sm flex items-center justify-center transition-all ${
                         isSelected
                           ? "ring-2 ring-offset-2 ring-primary scale-105"
                           : "ring-1 ring-outline-variant/60 hover:scale-105"
-                      }`}
+                      } ${!colorHasStock ? "opacity-40" : ""}`}
                       style={{ backgroundColor: color.hex }}
                     >
                       {isSelected && (
@@ -341,15 +383,26 @@ export function ProductDetailClient({ product, relatedProducts }: ProductDetailC
               <div className="grid grid-cols-5 gap-2.5">
                 {product.sizes.map((size) => {
                   const isSelected = selectedSize === size;
+                  const variantForSize = product.variants.find(
+                    (v) =>
+                      v.size.toLowerCase() === size.toLowerCase() &&
+                      v.color.toLowerCase() === selectedColor.toLowerCase()
+                  );
+                  const isSizeInStock = variantForSize ? Number(variantForSize.stock) > 0 : false;
                   return (
                     <button
                       key={size}
                       type="button"
                       onClick={() => setSelectedSize(size)}
-                      className={`h-11 rounded-lg font-title-md text-title-md font-semibold transition-all shadow-sm ${
+                      title={isSizeInStock ? `Size ${size}` : `Size ${size} (Sold Out)`}
+                      className={`h-11 rounded-lg font-title-md text-title-md font-semibold transition-all shadow-sm relative ${
                         isSelected
-                          ? "bg-primary-container text-on-primary shadow-primary/20"
-                          : "bg-surface-container hover:bg-surface-container-high text-primary"
+                          ? isSizeInStock
+                            ? "bg-primary-container text-on-primary shadow-primary/20"
+                            : "bg-error text-on-error shadow-error/20"
+                          : isSizeInStock
+                          ? "bg-surface-container hover:bg-surface-container-high text-primary"
+                          : "bg-surface-container/40 text-on-surface-variant/40 line-through"
                       }`}
                     >
                       {size}
@@ -359,7 +412,13 @@ export function ProductDetailClient({ product, relatedProducts }: ProductDetailC
               </div>
 
               {/* Dynamic Stock Status Chip */}
-              {stockCount === 0 ? (
+              {isEntireProductOutOfStock ? (
+                <div className="flex items-center gap-2 mt-1 px-3 py-2 bg-error-container text-error rounded-lg">
+                  <span className="font-label-sm text-label-sm font-semibold">
+                    This silhouette is completely sold out for the current season.
+                  </span>
+                </div>
+              ) : stockCount === 0 ? (
                 <div className="flex items-center gap-2 mt-1 px-3 py-2 bg-error-container text-error rounded-lg">
                   <span className="font-label-sm text-label-sm font-semibold">
                     Sold out in Size {selectedSize}. Restock planned for next lot.
@@ -400,8 +459,15 @@ export function ProductDetailClient({ product, relatedProducts }: ProductDetailC
                 <button
                   type="button"
                   onClick={handleInstantCheckout}
-                  className="sm:col-span-5 h-11 bg-surface-container-lowest hover:bg-surface-container text-primary font-title-md text-title-md font-semibold rounded-lg shadow-sm flex items-center justify-center gap-2 transition-all border border-outline-variant/30"
+                  disabled={stockCount === 0}
+                  className="sm:col-span-5 h-11 bg-surface-container-lowest hover:bg-surface-container text-primary disabled:opacity-50 disabled:cursor-not-allowed font-title-md text-title-md font-semibold rounded-lg shadow-sm flex items-center justify-center gap-2 transition-all border border-outline-variant/30"
                 >
+                  <Zap className="w-4 h-4 text-secondary" />
+                  <span>Instant Express Checkout</span>
+                  <span className="font-label-sm text-label-sm text-on-surface-variant font-normal">
+                    (UPI / Cards)
+                  </span>
+                </button>
                   <Zap className="w-4 h-4 text-secondary" />
                   <span>Instant Express Checkout</span>
                   <span className="font-label-sm text-label-sm text-on-surface-variant font-normal">
