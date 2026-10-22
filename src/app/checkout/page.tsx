@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -21,10 +21,15 @@ import {
   Phone,
   Mail,
   User,
+  Truck,
+  AlertCircle,
+  Plus,
 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
-import { formatPrice, generateOrderNumber } from "@/lib/utils";
-import { PaymentMethod, CustomerCheckoutDetails, OrderSummary } from "@/types";
+import { useAuth } from "@/context/AuthContext";
+import { createClient as createBrowserSupabaseClient } from "@/utils/supabase/client";
+import { formatPrice, calculateShippingFee, ShippingMethodId } from "@/lib/utils";
+import { CustomerCheckoutDetails, CustomerAddress } from "@/types";
 
 const checkoutSchema = z.object({
   fullName: z.string().min(2, "Full name must be at least 2 characters"),
@@ -43,10 +48,20 @@ type CheckoutFormData = z.infer<typeof checkoutSchema>;
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { items, itemCount, subtotal, discount, appliedCoupon, shipping, total, clearCart } = useCart();
+  const { items, itemCount, subtotal, discount, appliedCoupon, clearCart } = useCart();
+  const { user, profile } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Pre-fill with demo details matching Stitch UI design
+  // Saved address management
+  const [savedAddresses, setSavedAddresses] = useState<CustomerAddress[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | "new">("new");
+
+  // Shipping method selection
+  const [shippingMethod, setShippingMethod] = useState<ShippingMethodId>("standard_air");
+
+  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+
   const {
     register,
     handleSubmit,
@@ -56,26 +71,112 @@ export default function CheckoutPage() {
   } = useForm<CheckoutFormData>({
     resolver: zodResolver(checkoutSchema),
     defaultValues: {
-      fullName: "Priya Sundaram",
-      email: "priya@example.com",
-      phone: "9820144521",
-      addressLine1: "14B Seagull Apt, Carter Road",
-      addressLine2: "Bandra West",
-      city: "Mumbai",
-      state: "Maharashtra",
-      pincode: "400050",
+      fullName: "",
+      email: "",
+      phone: "",
+      addressLine1: "",
+      addressLine2: "",
+      city: "",
+      state: "",
+      pincode: "",
       paymentMethod: "upi",
-      deliveryNotes: "Please deliver between 2 PM and 6 PM.",
+      deliveryNotes: "",
     },
   });
 
+  const applyAddressToForm = useCallback(
+    (addr: CustomerAddress) => {
+      setValue("fullName", addr.fullName || profile?.fullName || "");
+      setValue("phone", addr.phone || profile?.phone || "");
+      setValue("addressLine1", addr.addressLine1);
+      setValue("addressLine2", addr.addressLine2 || "");
+      setValue("city", addr.city);
+      setValue("state", addr.state);
+      setValue("pincode", addr.pincode);
+    },
+    [setValue, profile]
+  );
+
+  useEffect(() => {
+    async function loadAddresses() {
+      if (!user) return;
+
+      if (profile?.fullName) setValue("fullName", profile.fullName);
+      if (user.email) setValue("email", user.email);
+      if (profile?.phone) setValue("phone", profile.phone);
+
+      try {
+        const { data, error } = await supabase
+          .from("customer_addresses")
+          .select("*")
+          .order("is_default", { ascending: false });
+
+        let list: CustomerAddress[] = [];
+        if (!error && data && data.length > 0) {
+          list = data.map((a: any) => ({
+            id: a.id,
+            customerId: a.customer_id,
+            fullName: a.full_name,
+            phone: a.phone,
+            addressLine1: a.address_line1,
+            addressLine2: a.address_line2,
+            city: a.city,
+            state: a.state,
+            pincode: a.pincode,
+            isDefault: a.is_default,
+          }));
+        } else if (typeof window !== "undefined") {
+          const local = localStorage.getItem(`velure_addresses_${user.id}`);
+          if (local) {
+            try {
+              list = JSON.parse(local);
+            } catch (e) {}
+          }
+        }
+
+        if (list.length > 0) {
+          setSavedAddresses(list);
+          const def = list.find((a) => a.isDefault) || list[0];
+          setSelectedAddressId(def.id);
+          applyAddressToForm(def);
+        }
+      } catch (err) {
+        console.warn("Could not load addresses:", err);
+      }
+    }
+
+    loadAddresses();
+  }, [user, profile, setValue, supabase, applyAddressToForm]);
+
   const selectedPaymentMethod = watch("paymentMethod");
+
+  // Dynamic authoritative shipping & order totals calculation
+  const calculatedShipping = calculateShippingFee(subtotal, shippingMethod);
+  const calculatedTotal = Math.max(0, subtotal - discount + calculatedShipping);
+
+  const handleAutoFillDemo = () => {
+    setValue("fullName", "Priya Sundaram");
+    setValue("email", user?.email || "priya.sundaram@atelier-velure.com");
+    setValue("phone", "9820144521");
+    setValue("addressLine1", "14B Seagull Apt, Carter Road");
+    setValue("addressLine2", "Bandra West");
+    setValue("city", "Mumbai");
+    setValue("state", "Maharashtra");
+    setValue("pincode", "400050");
+    setValue("deliveryNotes", "Please deliver between 2 PM and 6 PM. Fragile silk packaging.");
+    setSelectedAddressId("new");
+    setErrorMessage(null);
+  };
 
   const onSubmit = async (data: CheckoutFormData) => {
     setIsSubmitting(true);
+    setErrorMessage(null);
 
-    // Simulate authentic demo order processing
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    // Client-side generated idempotency key to prevent double charging/ordering
+    const idempotencyKey =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `idem_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
     const customerDetails: CustomerCheckoutDetails = {
       fullName: data.fullName,
@@ -90,32 +191,78 @@ export default function CheckoutPage() {
       paymentMethod: data.paymentMethod,
     };
 
-    const orderNumber = generateOrderNumber();
-    const orderSummary: OrderSummary = {
-      orderId: `ord_${Date.now()}`,
-      orderNumber,
-      createdAt: new Date().toISOString(),
-      customer: customerDetails,
-      items: [...items],
-      subtotal,
-      shipping,
-      discount,
-      couponCode: appliedCoupon || undefined,
-      tax: Math.round(subtotal * 0.12),
-      total,
-      paymentMethod: data.paymentMethod,
-      status: "confirmed",
-      trackingNumber: `BD-AIR-${Math.floor(100000 + Math.random() * 900000)}`,
-      estimatedDelivery: "2–3 business days via BlueDart Express Air",
-    };
+    try {
+      // Authoritative server-side checkout creation & validation
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-idempotency-key": idempotencyKey,
+        },
+        body: JSON.stringify({
+          idempotencyKey,
+          customerId: user?.id || null,
+          items: items.map((i) => ({
+            productId: i.productId,
+            variantId: i.variantId,
+            sku: i.sku,
+            size: i.size,
+            color: i.color,
+            quantity: i.quantity,
+          })),
+          couponCode: appliedCoupon,
+          shippingMethodId: shippingMethod,
+          shippingAddress: customerDetails,
+          customer: customerDetails,
+          deliveryNotes: data.deliveryNotes,
+          paymentMethod: data.paymentMethod,
+        }),
+      });
 
-    // Save order in session storage for the confirmation page
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem("velure_latest_order", JSON.stringify(orderSummary));
+      const check = await res.json();
+
+      if (!res.ok || !check.success) {
+        setErrorMessage(
+          check.error || "Some items in your cart are no longer available or out of stock."
+        );
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Persist authoritative order snapshot in session storage for confirmation page
+      const authoritativeOrder = check.order;
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("velure_latest_order", JSON.stringify(authoritativeOrder));
+      }
+
+      clearCart();
+
+      // For digital payment methods (UPI, Card, Netbanking), initiate gateway session
+      if (data.paymentMethod !== "cod") {
+        try {
+          const payRes = await fetch("/api/payments/initiate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              orderNumber: authoritativeOrder.orderNumber,
+              returnUrl: `${window.location.origin}/order-confirmation?order=${encodeURIComponent(authoritativeOrder.orderNumber)}`,
+            }),
+          });
+          const payData = await payRes.json();
+          if (payData.success && payData.checkoutUrl) {
+            router.push(payData.checkoutUrl);
+            return;
+          }
+        } catch (payErr) {
+          console.warn("Payment initiation fallback:", payErr);
+        }
+      }
+
+      router.push(`/order-confirmation?order=${encodeURIComponent(authoritativeOrder.orderNumber)}`);
+    } catch (err: any) {
+      setErrorMessage(err.message || "Failed to process checkout. Please try again.");
+      setIsSubmitting(false);
     }
-
-    clearCart();
-    router.push(`/order-confirmation?order=${orderNumber}`);
   };
 
   if (items.length === 0) {
@@ -142,23 +289,67 @@ export default function CheckoutPage() {
   return (
     <main className="w-full max-w-[1440px] mx-auto px-6 lg:px-12 py-8">
       {/* Demo Notice Banner */}
-      <div className="mb-8 p-4 rounded-xl bg-secondary-container/20 border border-secondary-container text-on-surface font-body-sm text-body-sm flex items-center justify-between gap-4">
+      <div className="mb-8 p-4 rounded-xl bg-secondary-container/20 border border-secondary-container text-on-surface font-body-sm text-body-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-2.5">
           <Sparkles className="w-5 h-5 text-secondary shrink-0" />
           <span>
-            <strong>Demo Storefront Simulation:</strong> This checkout flow simulates a real order without processing real credit cards or financial transactions.
+            <strong>Atelier Checkout Foundation:</strong> Prices, inventory reservations, coupons, and shipping fees are calculated authoritatively on the backend.
           </span>
         </div>
-        <span className="font-label-sm uppercase tracking-wider text-secondary font-bold shrink-0">
-          Sandboxed Mode
-        </span>
+        <button
+          type="button"
+          onClick={handleAutoFillDemo}
+          className="font-label-sm uppercase tracking-wider text-secondary font-bold hover:underline shrink-0"
+        >
+          Auto-fill Demo Details
+        </button>
       </div>
+
+      {errorMessage && (
+        <div className="mb-8 p-4 rounded-xl bg-error/10 border border-error/30 text-error font-body-sm flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-semibold">Unable to complete checkout</p>
+            <p>{errorMessage}</p>
+            {(errorMessage.includes("stock") || errorMessage.includes("available")) && (
+              <Link href="/cart" className="inline-block mt-2 font-semibold underline hover:opacity-80">
+                Return to shopping bag to adjust pieces →
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
         {/* Left Column: Checkout Form */}
         <div className="lg:col-span-7">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-            {/* Step 1: Contact & Delivery */}
+            {user ? (
+              <div className="p-3.5 rounded-xl bg-secondary/10 border border-secondary/20 flex items-center justify-between text-xs text-secondary mb-2">
+                <span className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>
+                    Checking out as patron: <strong>{profile?.fullName || user.email}</strong>
+                  </span>
+                </span>
+                <Link href="/account/addresses" className="underline font-semibold hover:text-primary">
+                  Manage addresses
+                </Link>
+              </div>
+            ) : (
+              <div className="p-3.5 rounded-xl bg-surface-container border border-outline-variant/30 flex items-center justify-between text-xs text-on-surface-variant mb-2">
+                <span>Already an atelier patron?</span>
+                <Link
+                  href="/login?redirectTo=/checkout"
+                  className="text-primary font-semibold hover:underline flex items-center gap-1"
+                >
+                  <span>Sign in for saved addresses</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            )}
+
+            {/* Step 1: Delivery Address Selection */}
             <div className="p-6 sm:p-8 rounded-2xl bg-surface-container-low border border-outline-variant/30 space-y-6">
               <div className="flex items-center justify-between pb-4 border-b border-surface-container-high">
                 <div className="flex items-center gap-3">
@@ -173,6 +364,67 @@ export default function CheckoutPage() {
                   <MapPin className="w-4 h-4 text-secondary" /> Pan-India Express
                 </span>
               </div>
+
+              {/* Saved Addresses Selector (for authenticated users) */}
+              {savedAddresses.length > 0 && (
+                <div className="space-y-3 pb-4 border-b border-surface-container-high">
+                  <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface font-semibold block">
+                    Choose Saved Atelier Address
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {savedAddresses.map((addr) => (
+                      <div
+                        key={addr.id}
+                        onClick={() => {
+                          setSelectedAddressId(addr.id);
+                          applyAddressToForm(addr);
+                        }}
+                        className={`p-3.5 rounded-xl border text-left cursor-pointer transition-all ${
+                          selectedAddressId === addr.id
+                            ? "bg-surface-container-lowest border-primary ring-1 ring-primary shadow-sm"
+                            : "bg-surface-container border-outline-variant/30 hover:border-outline-variant"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-semibold text-primary text-sm truncate">
+                            {addr.fullName}
+                          </span>
+                          {addr.isDefault && (
+                            <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-secondary/15 text-secondary">
+                              Default
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-on-surface-variant line-clamp-2">
+                          {addr.addressLine1}, {addr.city}, {addr.pincode}
+                        </p>
+                        <p className="text-xs text-on-surface-variant mt-1">
+                          Phone: {addr.phone}
+                        </p>
+                      </div>
+                    ))}
+
+                    <div
+                      onClick={() => {
+                        setSelectedAddressId("new");
+                        setValue("addressLine1", "");
+                        setValue("addressLine2", "");
+                        setValue("city", "");
+                        setValue("state", "");
+                        setValue("pincode", "");
+                      }}
+                      className={`p-3.5 rounded-xl border border-dashed flex items-center justify-center gap-2 cursor-pointer transition-all text-xs font-semibold ${
+                        selectedAddressId === "new"
+                          ? "border-primary bg-primary/5 text-primary"
+                          : "border-outline-variant/60 text-on-surface-variant hover:border-outline-variant"
+                      }`}
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Enter a New Address</span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Full Name */}
@@ -204,7 +456,7 @@ export default function CheckoutPage() {
                     <input
                       {...register("email")}
                       type="email"
-                      placeholder="priya@example.com"
+                      placeholder="patron@example.com"
                       className="w-full h-11 pl-10 pr-3.5 rounded-lg bg-surface-container-lowest border border-outline-variant font-body-md text-body-md text-on-surface focus:outline-none focus:ring-1 focus:ring-primary shadow-sm"
                     />
                   </div>
@@ -325,12 +577,98 @@ export default function CheckoutPage() {
               </div>
             </div>
 
-            {/* Step 2: Payment Method Selection */}
+            {/* Step 2: Shipping Method Selection */}
             <div className="p-6 sm:p-8 rounded-2xl bg-surface-container-low border border-outline-variant/30 space-y-6">
               <div className="flex items-center justify-between pb-4 border-b border-surface-container-high">
                 <div className="flex items-center gap-3">
                   <span className="w-6 h-6 rounded-full bg-primary text-on-primary font-label-sm text-label-sm flex items-center justify-center font-bold">
                     2
+                  </span>
+                  <h2 className="font-title-md text-title-md text-primary font-semibold uppercase tracking-wider">
+                    Select Shipping Method
+                  </h2>
+                </div>
+                <Truck className="w-5 h-5 text-secondary" />
+              </div>
+
+              <div className="space-y-3">
+                {/* Standard Express Air */}
+                <label
+                  onClick={() => setShippingMethod("standard_air")}
+                  className={`p-4 rounded-xl bg-surface-container-lowest flex items-center justify-between cursor-pointer shadow-sm transition-all border ${
+                    shippingMethod === "standard_air"
+                      ? "ring-2 ring-primary border-transparent"
+                      : "border-outline-variant/30 hover:border-outline-variant"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                      {shippingMethod === "standard_air" && (
+                        <div className="w-1.5 h-1.5 rounded-full bg-surface" />
+                      )}
+                    </div>
+                    <div>
+                      <span className="font-title-md text-title-md text-primary font-semibold block">
+                        Standard Priority Air (BlueDart)
+                      </span>
+                      <span className="font-body-sm text-body-sm text-on-surface-variant">
+                        Estimated 2–3 business days • Complimentary on orders ₹1,999+
+                      </span>
+                    </div>
+                  </div>
+                  <span className="font-semibold text-primary font-tabular-num">
+                    {subtotal >= 1999 ? (
+                      <span className="text-[#386641] uppercase tracking-wider text-xs font-bold">
+                        Free
+                      </span>
+                    ) : (
+                      formatPrice(250)
+                    )}
+                  </span>
+                </label>
+
+                {/* Atelier White-Glove Courier */}
+                <label
+                  onClick={() => setShippingMethod("express_courier")}
+                  className={`p-4 rounded-xl bg-surface-container-lowest flex items-center justify-between cursor-pointer shadow-sm transition-all border ${
+                    shippingMethod === "express_courier"
+                      ? "ring-2 ring-primary border-transparent"
+                      : "border-outline-variant/30 hover:border-outline-variant"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-4 h-4 rounded-full bg-surface-container-high flex items-center justify-center">
+                      {shippingMethod === "express_courier" && (
+                        <div className="w-2 h-2 rounded-full bg-primary" />
+                      )}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-title-md text-title-md text-primary font-semibold block">
+                          Atelier White-Glove Courier
+                        </span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-secondary/15 text-secondary uppercase tracking-wider">
+                          Expedited
+                        </span>
+                      </div>
+                      <span className="font-body-sm text-body-sm text-on-surface-variant">
+                        Guaranteed 24–48h delivery • Bespoke garment-bag packaging
+                      </span>
+                    </div>
+                  </div>
+                  <span className="font-semibold text-primary font-tabular-num">
+                    {formatPrice(450)}
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            {/* Step 3: Payment Method Selection */}
+            <div className="p-6 sm:p-8 rounded-2xl bg-surface-container-low border border-outline-variant/30 space-y-6">
+              <div className="flex items-center justify-between pb-4 border-b border-surface-container-high">
+                <div className="flex items-center gap-3">
+                  <span className="w-6 h-6 rounded-full bg-primary text-on-primary font-label-sm text-label-sm flex items-center justify-center font-bold">
+                    3
                   </span>
                   <h2 className="font-title-md text-title-md text-primary font-semibold uppercase tracking-wider">
                     Select Payment Method
@@ -342,7 +680,7 @@ export default function CheckoutPage() {
               </div>
 
               <div className="space-y-3">
-                {/* Razorpay UPI */}
+                {/* UPI */}
                 <label
                   onClick={() => setValue("paymentMethod", "upi")}
                   className={`p-4 rounded-xl bg-surface-container-lowest flex flex-col gap-2.5 cursor-pointer shadow-sm transition-all border ${
@@ -360,7 +698,7 @@ export default function CheckoutPage() {
                       </div>
                       <div>
                         <span className="font-title-md text-title-md text-primary font-semibold block">
-                          Razorpay UPI &amp; Instant Pay
+                          Instant UPI Pay
                         </span>
                         <span className="font-body-sm text-body-sm text-on-surface-variant">
                           Google Pay, PhonePe, Paytm, CRED &amp; Any UPI App
@@ -478,11 +816,11 @@ export default function CheckoutPage() {
                 className="w-full h-14 rounded-lg bg-[#582F0E] text-[#FAF7F2] hover:bg-[#7F4F24] font-title-md text-title-md font-semibold uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2 group disabled:opacity-60"
               >
                 {isSubmitting ? (
-                  <span>Securing Your Atelier Order...</span>
+                  <span>Authorizing Atelier Order...</span>
                 ) : (
                   <>
                     <span>Place Order</span>
-                    <span className="font-tabular-num">• {formatPrice(total)}</span>
+                    <span className="font-tabular-num">• {formatPrice(calculatedTotal)}</span>
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </>
                 )}
@@ -549,9 +887,19 @@ export default function CheckoutPage() {
               </div>
 
               <div className="flex justify-between text-on-surface-variant">
-                <span>Express Air Shipping</span>
-                <span className="font-label-md text-label-md font-semibold text-[#386641] uppercase">
-                  {shipping === 0 ? "FREE" : formatPrice(shipping)}
+                <span>
+                  {shippingMethod === "express_courier"
+                    ? "White-Glove Courier"
+                    : "Priority Express Air"}
+                </span>
+                <span
+                  className={
+                    calculatedShipping === 0
+                      ? "font-label-md text-label-md font-semibold text-[#386641] uppercase"
+                      : "font-tabular-num text-on-surface"
+                  }
+                >
+                  {calculatedShipping === 0 ? "FREE" : formatPrice(calculatedShipping)}
                 </span>
               </div>
 
@@ -570,7 +918,7 @@ export default function CheckoutPage() {
                   </p>
                 </div>
                 <span className="font-headline-md text-headline-md text-primary font-bold font-tabular-num">
-                  {formatPrice(total)}
+                  {formatPrice(calculatedTotal)}
                 </span>
               </div>
             </div>

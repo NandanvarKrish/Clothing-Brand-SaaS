@@ -16,9 +16,12 @@ export interface ProductVariant {
 }
 
 export interface ProductImage {
+  id?: string;
   url: string;
   alt: string;
   label?: string; // 'Front' | 'Back' | 'Detail' | 'Lookbook'
+  sortOrder?: number;
+  isPrimary?: boolean;
 }
 
 export interface ProductReview {
@@ -49,6 +52,8 @@ export interface Product {
   featured?: boolean;
   bestseller?: boolean;
   newArrival?: boolean;
+  status?: 'draft' | 'published' | 'archived';
+  tags?: string[];
   collectionIds: string[];
   images: ProductImage[];
   colors: ProductColor[];
@@ -86,6 +91,11 @@ export interface CartItem {
   quantity: number;
   maxStock: number;
   sku?: string;
+  variantId?: string;
+  isAvailable?: boolean;
+  stockStatus?: 'in_stock' | 'low_stock' | 'out_of_stock' | 'unavailable';
+  priceChanged?: boolean;
+  message?: string;
 }
 
 export interface WishlistItem {
@@ -98,6 +108,7 @@ export interface WishlistItem {
   category: ProductCategory;
   badge?: string;
   addedAt: string;
+  isAvailable?: boolean;
 }
 
 export type PaymentMethod = 'upi' | 'card' | 'netbanking' | 'cod';
@@ -129,7 +140,35 @@ export interface OrderSummary {
   tax: number;
   total: number;
   paymentMethod: PaymentMethod;
-  status: 'confirmed' | 'tailoring' | 'inspection' | 'dispatched' | 'delivered';
+  status: 'pending' | 'confirmed' | 'tailoring' | 'inspection' | 'dispatched' | 'delivered';
+  paymentStatus?: 'pending' | 'authorized' | 'captured' | 'paid' | 'failed' | 'refunded';
+  fulfillmentStatus?: 'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
   trackingNumber?: string;
+  carrier?: string;
   estimatedDelivery: string;
+  deliveryNotes?: string;
+}
+
+export interface CustomerProfile {
+  id?: string;
+  userId: string;
+  fullName: string;
+  email: string;
+  phone?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CustomerAddress {
+  id: string;
+  customerId?: string;
+  fullName: string;
+  phone: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  pincode: string;
+  isDefault: boolean;
+  createdAt?: string;
 }

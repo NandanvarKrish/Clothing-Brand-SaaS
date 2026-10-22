@@ -24,6 +24,19 @@ export function isValidPincode(pincode: string): boolean {
   return /^[1-9][0-9]{5}$/.test(pincode.trim());
 }
 
+export type ShippingMethodId = "standard_air" | "express_courier";
+
+/**
+ * Calculates shipping fee authoritatively based on subtotal and chosen method.
+ */
+export function calculateShippingFee(subtotal: number, method: ShippingMethodId = "standard_air"): number {
+  if (method === "express_courier") {
+    return 450; // Priority White-Glove courier with same-day tailoring dispatch
+  }
+  // Standard Express Air
+  return subtotal >= 1999 || subtotal === 0 ? 0 : 250;
+}
+
 /**
  * Generate a realistic demo order number
  */

@@ -89,11 +89,15 @@ export default function WishlistPage() {
               >
                 <Trash2 className="w-4 h-4" />
               </button>
-              {item.badge && (
+              {item.isAvailable === false ? (
+                <div className="absolute top-3 left-3 bg-error-container text-error font-label-sm text-label-sm px-2 py-0.5 rounded font-semibold uppercase shadow-sm">
+                  Unavailable
+                </div>
+              ) : item.badge ? (
                 <div className="absolute top-3 left-3 bg-surface-container-lowest/90 text-secondary font-label-sm text-label-sm px-2 py-0.5 rounded font-semibold uppercase shadow-sm">
                   {item.badge}
                 </div>
-              )}
+              ) : null}
             </div>
 
             <div className="p-5 flex flex-col flex-1 justify-between gap-4">
@@ -101,31 +105,55 @@ export default function WishlistPage() {
                 <span className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider block mb-1">
                   {item.category}
                 </span>
-                <Link
-                  href={`/products/${item.slug}`}
-                  className="font-title-md text-title-md text-primary font-semibold hover:text-secondary transition-colors block"
-                >
-                  {item.name}
-                </Link>
-                <span className="font-headline-md text-headline-md font-bold text-primary font-tabular-num mt-2 block">
-                  {formatPrice(item.price)}
-                </span>
+                {item.isAvailable === false ? (
+                  <span className="font-title-md text-title-md text-on-surface-variant font-semibold block">
+                    {item.name}
+                  </span>
+                ) : (
+                  <Link
+                    href={`/products/${item.slug}`}
+                    className="font-title-md text-title-md text-primary font-semibold hover:text-secondary transition-colors block"
+                  >
+                    {item.name}
+                  </Link>
+                )}
+                {item.isAvailable === false ? (
+                  <p className="text-xs text-error mt-2">
+                    No longer available in active catalog.
+                  </p>
+                ) : (
+                  <span className="font-headline-md text-headline-md font-bold text-primary font-tabular-num mt-2 block">
+                    {formatPrice(item.price)}
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center gap-2 pt-2 border-t border-surface-container">
-                <button
-                  type="button"
-                  onClick={() => handleMoveToBag(item.productId)}
-                  className="flex-1 py-2 rounded bg-primary text-on-primary hover:bg-primary-container transition-colors font-title-md text-sm font-semibold flex items-center justify-center gap-1.5 shadow-sm"
-                >
-                  <ShoppingBag className="w-4 h-4" /> Move to Bag
-                </button>
-                <Link
-                  href={`/products/${item.slug}`}
-                  className="px-3 py-2 rounded bg-surface-container hover:bg-surface-container-high text-primary font-label-md text-xs font-semibold uppercase tracking-wider transition-colors inline-flex items-center justify-center"
-                >
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
+                {item.isAvailable === false ? (
+                  <button
+                    type="button"
+                    onClick={() => removeFromWishlist(item.productId)}
+                    className="flex-1 py-2 rounded bg-surface-container text-on-surface-variant hover:text-error transition-colors font-title-md text-sm font-semibold flex items-center justify-center gap-1.5"
+                  >
+                    <Trash2 className="w-4 h-4" /> Remove Piece
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleMoveToBag(item.productId)}
+                      className="flex-1 py-2 rounded bg-primary text-on-primary hover:bg-primary-container transition-colors font-title-md text-sm font-semibold flex items-center justify-center gap-1.5 shadow-sm"
+                    >
+                      <ShoppingBag className="w-4 h-4" /> Move to Bag
+                    </button>
+                    <Link
+                      href={`/products/${item.slug}`}
+                      className="px-3 py-2 rounded bg-surface-container hover:bg-surface-container-high text-primary font-label-md text-xs font-semibold uppercase tracking-wider transition-colors inline-flex items-center justify-center"
+                    >
+                      <ArrowRight className="w-4 h-4" />
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
           </article>

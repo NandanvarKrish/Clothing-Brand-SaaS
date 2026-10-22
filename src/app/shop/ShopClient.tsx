@@ -73,10 +73,38 @@ export function ShopClient() {
   // Sync when searchParams change
   useEffect(() => {
     const cat = searchParams.get("category") as ProductCategory;
-    if (cat && CATEGORIES.includes(cat)) {
+    if (cat && (CATEGORIES.includes(cat) || facets?.categories?.some((c) => c.name === cat))) {
       setCategory(cat);
     }
-  }, [searchParams]);
+  }, [searchParams, facets]);
+
+  const availableCategories = useMemo(() => {
+    if (facets?.categories && facets.categories.length > 0) {
+      return facets.categories.map((c) => c.name);
+    }
+    return CATEGORIES;
+  }, [facets]);
+
+  const availableColors = useMemo(() => {
+    if (facets?.colors && facets.colors.length > 0) {
+      return facets.colors.slice(0, 6);
+    }
+    return QUICK_COLORS;
+  }, [facets]);
+
+  const availableFabrics = useMemo(() => {
+    if (facets?.fabrics && facets.fabrics.length > 0) {
+      return facets.fabrics;
+    }
+    return FABRICS;
+  }, [facets]);
+
+  const availableSizes = useMemo(() => {
+    if (facets?.sizes && facets.sizes.length > 0) {
+      return facets.sizes;
+    }
+    return SIZES;
+  }, [facets]);
 
   // Handle category change
   const handleCategoryChange = (newCat: ProductCategory) => {
@@ -288,7 +316,7 @@ export function ShopClient() {
 
             {/* Category Quick Chips */}
             <div className="hidden sm:flex items-center gap-1.5 bg-surface-container-low p-1 rounded-lg">
-              {CATEGORIES.map((cat) => (
+              {availableCategories.map((cat) => (
                 <button
                   key={cat}
                   type="button"
@@ -310,7 +338,7 @@ export function ShopClient() {
                 Palette:
               </span>
               <div className="flex items-center gap-1.5">
-                {QUICK_COLORS.map((color) => {
+                {availableColors.map((color) => {
                   const isSelected = selectedColors.includes(color.name);
                   return (
                     <button
@@ -475,7 +503,7 @@ export function ShopClient() {
                 Fabric Origin
               </h2>
               <div className="space-y-2">
-                {FABRICS.map((fabric) => (
+                {availableFabrics.map((fabric) => (
                   <label
                     key={fabric}
                     className="flex items-center gap-2 cursor-pointer font-body-md text-body-md text-on-surface-variant hover:text-on-surface"
@@ -498,7 +526,7 @@ export function ShopClient() {
                 Available Sizing
               </h2>
               <div className="flex flex-wrap gap-2">
-                {SIZES.map((size) => {
+                {availableSizes.map((size) => {
                   const isSelected = selectedSizes.includes(size);
                   return (
                     <button

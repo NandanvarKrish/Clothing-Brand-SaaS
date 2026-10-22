@@ -41,6 +41,8 @@ export function SearchClient() {
         p.fabric.toLowerCase().includes(q) ||
         p.category.toLowerCase().includes(q) ||
         (p.fabricOrigin && p.fabricOrigin.toLowerCase().includes(q)) ||
+        (p.weaveTechnique && p.weaveTechnique.toLowerCase().includes(q)) ||
+        (p.tags && p.tags.some((t) => t.toLowerCase().includes(q))) ||
         p.colors.some((c) => c.name.toLowerCase().includes(q))
     );
   }, [query, products]);
@@ -112,7 +114,17 @@ export function SearchClient() {
       </div>
 
       {/* Grid or Empty */}
-      {results.length === 0 ? (
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="animate-pulse flex flex-col gap-3">
+              <div className="w-full aspect-[3/4] bg-surface-container-high rounded-xl" />
+              <div className="w-2/3 h-5 bg-surface-container-high rounded" />
+              <div className="w-1/3 h-4 bg-surface-container-high rounded" />
+            </div>
+          ))}
+        </div>
+      ) : results.length === 0 ? (
         <div className="text-center py-16 bg-surface-container-low rounded-2xl max-w-md mx-auto p-8">
           <p className="font-headline-md text-headline-md text-primary font-semibold mb-2">
             No Matching Silhouettes Found

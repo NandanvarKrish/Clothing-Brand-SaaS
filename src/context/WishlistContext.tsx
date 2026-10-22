@@ -1,8 +1,10 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import { Product, WishlistItem } from "@/types";
 import { getFromStorage, saveToStorage } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
+import { validateAndSyncWishlist, reconcileWishlistIds } from "@/services/wishlistService";
 
 interface WishlistContextType {
   items: WishlistItem[];
@@ -11,63 +13,71 @@ interface WishlistContextType {
   toggleWishlist: (product: Product) => void;
   removeFromWishlist: (productId: string) => void;
   clearWishlist: () => void;
+  refreshWishlist: () => Promise<void>;
 }
 
 const WishlistContext = createContext<WishlistContextType | undefined>(undefined);
 
-const WISHLIST_STORAGE_KEY = "velure_wishlist_items_v1";
-
-const INITIAL_DEMO_WISHLIST: WishlistItem[] = [
-  {
-    productId: "prod-001",
-    slug: "linen-chore-jacket-espresso",
-    name: "Linen Chore Jacket",
-    price: 4200,
-    compareAtPrice: 4800,
-    image: "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?q=80&w=1600&auto=format&fit=crop",
-    category: "Outerwear",
-    badge: "Low Batch (8 left)",
-    addedAt: "2024-10-14T10:00:00Z",
-  },
-  {
-    productId: "prod-002",
-    slug: "raw-silk-midi-dress-sand-dune",
-    name: "Raw Silk Midi Dress",
-    price: 3850,
-    compareAtPrice: 4400,
-    image: "https://images.unsplash.com/photo-1515372039744-b8f02a3ae446?q=80&w=1600&auto=format&fit=crop",
-    category: "Dresses",
-    badge: "Bestseller",
-    addedAt: "2024-10-14T11:00:00Z",
-  },
-  {
-    productId: "prod-003",
-    slug: "sculpted-tailored-blazer-espresso",
-    name: "Sculpted Tailored Blazer",
-    price: 6200,
-    compareAtPrice: 7100,
-    image: "https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=1600&auto=format&fit=crop",
-    category: "Outerwear",
-    badge: "Limited Run (12 left)",
-    addedAt: "2024-10-14T12:00:00Z",
-  },
-];
+const GUEST_WISHLIST_STORAGE_KEY = "velure_wishlist_items_guest_v2";
 
 export function WishlistProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const [items, setItems] = useState<WishlistItem[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
+  const prevUserIdRef = useRef<string | null | undefined>(undefined);
 
+  const currentStorageKey = user
+    ? `velure_wishlist_items_user_${user.id}`
+    : GUEST_WISHLIST_STORAGE_KEY;
+
+  // 1. Initial hydration and session reconciliation
   useEffect(() => {
-    const saved = getFromStorage<WishlistItem[]>(WISHLIST_STORAGE_KEY, INITIAL_DEMO_WISHLIST);
+    const isLoginTransition = prevUserIdRef.current === null && user !== null;
+    prevUserIdRef.current = user?.id || null;
+
+    if (isLoginTransition) {
+      // Reconcile guest wishlist into customer's authenticated wishlist
+      const guestItems = getFromStorage<WishlistItem[]>(GUEST_WISHLIST_STORAGE_KEY, []);
+      const userItems = getFromStorage<WishlistItem[]>(`velure_wishlist_items_user_${user!.id}`, []);
+
+      const guestIds = guestItems.map((i) => i.productId);
+      const userIds = userItems.map((i) => i.productId);
+      const mergedIds = reconcileWishlistIds(guestIds, userIds);
+
+      saveToStorage(GUEST_WISHLIST_STORAGE_KEY, []);
+
+      // Validate merged IDs against real catalog
+      validateAndSyncWishlist(mergedIds.map((id) => ({ productId: id }))).then((validated) => {
+        setItems(validated);
+        saveToStorage(`velure_wishlist_items_user_${user!.id}`, validated);
+      });
+      setIsHydrated(true);
+      return;
+    }
+
+    const saved = getFromStorage<WishlistItem[]>(currentStorageKey, []);
     setItems(saved);
     setIsHydrated(true);
-  }, []);
 
+    if (saved.length > 0) {
+      validateAndSyncWishlist(saved).then((validated) => {
+        setItems(validated);
+      });
+    }
+  }, [user, currentStorageKey]);
+
+  // 2. Persist to storage on change
   useEffect(() => {
     if (isHydrated) {
-      saveToStorage(WISHLIST_STORAGE_KEY, items);
+      saveToStorage(currentStorageKey, items);
     }
-  }, [items, isHydrated]);
+  }, [items, currentStorageKey, isHydrated]);
+
+  const refreshWishlist = useCallback(async () => {
+    if (items.length === 0) return;
+    const validated = await validateAndSyncWishlist(items);
+    setItems(validated);
+  }, [items]);
 
   const isInWishlist = (productId: string) => {
     return items.some((i) => i.productId === productId);
@@ -79,20 +89,19 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
       if (exists) {
         return prev.filter((i) => i.productId !== product.id);
       }
-      return [
-        ...prev,
-        {
-          productId: product.id,
-          slug: product.slug,
-          name: product.name,
-          price: product.price,
-          compareAtPrice: product.compareAtPrice,
-          image: product.images[0]?.url || "",
-          category: product.category,
-          badge: product.badge,
-          addedAt: new Date().toISOString(),
-        },
-      ];
+      const newItem: WishlistItem = {
+        productId: product.id,
+        slug: product.slug,
+        name: product.name,
+        price: product.price,
+        compareAtPrice: product.compareAtPrice,
+        image: product.images[0]?.url || "",
+        category: product.category,
+        badge: product.badge,
+        addedAt: new Date().toISOString(),
+        isAvailable: product.status === "published",
+      };
+      return [...prev, newItem];
     });
   };
 
@@ -113,6 +122,7 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
         toggleWishlist,
         removeFromWishlist,
         clearWishlist,
+        refreshWishlist,
       }}
     >
       {children}

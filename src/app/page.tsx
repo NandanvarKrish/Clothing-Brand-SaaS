@@ -118,33 +118,54 @@ export default function HomePage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {collections.map((col) => (
-              <Link
-                key={col.id}
-                href={`/collections/${col.slug}`}
-                className="group relative h-[480px] rounded-xl overflow-hidden bg-surface-container shadow-sm flex flex-col justify-end p-8"
-              >
-                <Image
-                  src={col.image}
-                  alt={col.title}
-                  fill
-                  sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                  className="object-cover transition-transform duration-700 ease-out group-hover:scale-105"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-primary/80 via-primary/20 to-transparent" />
-                <div className="relative z-10 text-surface">
-                  <span className="font-label-sm text-label-sm tracking-[0.2em] uppercase text-secondary-container font-semibold block mb-1">
-                    {col.editionBadge || col.tagline}
-                  </span>
-                  <h3 className="font-headline-md text-headline-md font-semibold text-surface mb-2">
-                    {col.title}
-                  </h3>
-                  <p className="font-body-sm text-body-sm text-surface/80 line-clamp-2">
-                    {col.description}
-                  </p>
-                </div>
-              </Link>
-            ))}
+            {loading ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="animate-pulse bg-surface-container-high rounded-xl h-[480px]" />
+              ))
+            ) : collections.length === 0 ? (
+              <div className="col-span-full py-16 text-center bg-surface-container-lowest rounded-xl border border-outline-variant/30">
+                <p className="font-headline-md text-headline-md text-primary font-semibold mb-2">
+                  Capsules In Preparation
+                </p>
+                <p className="font-body-md text-body-md text-on-surface-variant max-w-md mx-auto">
+                  Our artisans are currently tailoring upcoming seasonal chapters. Explore the full catalog in the atelier shop.
+                </p>
+                <Link
+                  href="/shop"
+                  className="mt-6 inline-flex items-center gap-2 px-6 py-2.5 rounded bg-primary text-on-primary font-title-md text-title-md hover:bg-primary-container transition-colors shadow-sm"
+                >
+                  Browse All Silhouettes
+                </Link>
+              </div>
+            ) : (
+              collections.map((col) => (
+                <Link
+                  key={col.id}
+                  href={`/collections/${col.slug}`}
+                  className="group relative h-[480px] rounded-xl overflow-hidden bg-surface-container shadow-sm flex flex-col justify-end p-8"
+                >
+                  <Image
+                    src={col.image || "https://images.unsplash.com/photo-1539109136881-3be0616acf4b?q=80&w=1600&auto=format&fit=crop"}
+                    alt={col.title}
+                    fill
+                    sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                    className="object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-primary/80 via-primary/20 to-transparent" />
+                  <div className="relative z-10 text-surface">
+                    <span className="font-label-sm text-label-sm tracking-[0.2em] uppercase text-secondary-container font-semibold block mb-1">
+                      {col.editionBadge || col.tagline}
+                    </span>
+                    <h3 className="font-headline-md text-headline-md font-semibold text-surface mb-2">
+                      {col.title}
+                    </h3>
+                    <p className="font-body-sm text-body-sm text-surface/80 line-clamp-2">
+                      {col.description}
+                    </p>
+                  </div>
+                </Link>
+              ))
+            )}
           </div>
         </section>
 
@@ -170,6 +191,21 @@ export default function HomePage() {
                 Array.from({ length: 4 }).map((_, i) => (
                   <div key={i} className="animate-pulse bg-surface-container-high rounded-xl h-[420px]" />
                 ))
+              ) : bestsellers.length === 0 ? (
+                <div className="col-span-full py-16 text-center bg-surface-container-lowest rounded-xl border border-outline-variant/30">
+                  <p className="font-headline-md text-headline-md text-primary font-semibold mb-2">
+                    Curated Editions Coming Soon
+                  </p>
+                  <p className="font-body-md text-body-md text-on-surface-variant max-w-md mx-auto">
+                    No silhouettes are currently flagged as bestsellers. Explore all available garments in our atelier catalog.
+                  </p>
+                  <Link
+                    href="/shop"
+                    className="mt-6 inline-flex items-center gap-2 px-6 py-2.5 rounded bg-primary text-on-primary font-title-md text-title-md hover:bg-primary-container transition-colors shadow-sm"
+                  >
+                    View All Garments
+                  </Link>
+                </div>
               ) : (
                 bestsellers.slice(0, 4).map((product) => (
                   <ProductCard key={product.id} product={product} />

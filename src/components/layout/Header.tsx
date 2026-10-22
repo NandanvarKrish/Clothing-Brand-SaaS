@@ -6,12 +6,14 @@ import { usePathname } from "next/navigation";
 import { Search, Heart, ShoppingBag, User, Menu, X } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
+import { useAuth } from "@/context/AuthContext";
 import { AnnouncementBar } from "./AnnouncementBar";
 
 export function Header() {
   const pathname = usePathname();
   const { itemCount: cartCount, openCart } = useCart();
   const { itemCount: wishlistCount } = useWishlist();
+  const { user, profile } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -97,8 +99,8 @@ export function Header() {
 
           {/* Account Link */}
           <Link
-            href="/contact"
-            aria-label="Customer Care & Account"
+            href={user ? "/account" : "/login"}
+            aria-label={user ? "Patron Account" : "Sign In to Account"}
             className="text-on-surface-variant hover:text-primary transition-colors hidden sm:flex items-center justify-center p-1"
           >
             <User className="w-[22px] h-[22px]" />
@@ -133,10 +135,23 @@ export function Header() {
             )}
           </button>
 
-          {/* Brand Atelier Seal Avatar */}
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary text-xs font-semibold uppercase tracking-wider shadow-sm">
-            VA
-          </div>
+          {/* Brand Atelier Seal / Patron Avatar */}
+          <Link
+            href={user ? "/account" : "/login"}
+            aria-label={user ? `Signed in as ${profile?.fullName || user.email}` : "Sign In"}
+            className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary text-xs font-semibold uppercase tracking-wider shadow-sm hover:bg-primary-container transition-colors"
+          >
+            {user
+              ? profile?.fullName
+                ? profile.fullName
+                    .split(" ")
+                    .map((n) => n[0])
+                    .slice(0, 2)
+                    .join("")
+                    .toUpperCase()
+                : "PA"
+              : "VA"}
+          </Link>
         </div>
       </div>
 
@@ -189,6 +204,17 @@ export function Header() {
                 {link.label}
               </Link>
             ))}
+            <Link
+              href={user ? "/account" : "/login"}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className={`py-2 px-3 rounded-lg font-title-md text-title-md transition-colors ${
+                pathname.startsWith("/account") || pathname === "/login"
+                  ? "bg-surface-container text-primary font-semibold"
+                  : "text-on-surface-variant hover:bg-surface-container-low hover:text-primary"
+              }`}
+            >
+              {user ? `Account (${profile?.fullName || "Patron"})` : "Sign In / Register"}
+            </Link>
           </nav>
           <div className="pt-4 border-t border-outline-variant/30 flex items-center justify-between text-body-sm text-on-surface-variant">
             <span>India (INR ₹)</span>

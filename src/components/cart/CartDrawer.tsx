@@ -6,7 +6,7 @@ import Image from "next/image";
 import { X, Plus, Minus, Trash2, Tag, CheckCircle2, ArrowRight, ArrowLeft, ShieldCheck, Sparkles } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { formatPrice } from "@/lib/utils";
-import { getProductById } from "@/services/productService";
+import { getProducts } from "@/services/productService";
 import { Product } from "@/types";
 
 export function CartDrawer() {
@@ -22,6 +22,7 @@ export function CartDrawer() {
     freeShippingProgress,
     total,
     isCartOpen,
+    hasUnavailableItems,
     closeCart,
     updateQuantity,
     removeItem,
@@ -30,13 +31,13 @@ export function CartDrawer() {
     addItem,
   } = useCart();
 
-  const [couponInput, setCouponInput] = useState(appliedCoupon || "FESTIVE10");
+  const [couponInput, setCouponInput] = useState(appliedCoupon || "");
   const [pairedProduct, setPairedProduct] = useState<Product | null>(null);
 
   React.useEffect(() => {
     async function loadPaired() {
-      const p = await getProductById("prod-013");
-      if (p) setPairedProduct(p);
+      const list = await getProducts({ limit: 1 });
+      if (list && list.length > 0) setPairedProduct(list[0]);
     }
     loadPaired();
   }, []);
@@ -195,6 +196,15 @@ export function CartDrawer() {
                               {item.color}
                             </span>
                           </div>
+                          {item.isAvailable === false ? (
+                            <div className="mt-1 text-xs text-error font-medium">
+                              {item.message || "Item no longer available"}
+                            </div>
+                          ) : item.message ? (
+                            <div className="mt-1 text-xs text-[#BC6C25] font-medium">
+                              {item.message}
+                            </div>
+                          ) : null}
                         </div>
                         <span className="font-tabular-num text-tabular-num text-primary font-bold">
                           {formatPrice(item.price * item.quantity)}
@@ -383,15 +393,31 @@ export function CartDrawer() {
             </div>
 
             {/* Place Order CTA */}
-            <Link
-              href="/checkout"
-              onClick={closeCart}
-              className="w-full h-12 rounded-lg bg-[#582F0E] text-[#FAF7F2] hover:bg-[#7F4F24] font-title-md text-title-md font-semibold uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2 group"
-            >
-              <span>Place Order</span>
-              <span className="font-tabular-num">• {formatPrice(total)}</span>
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </Link>
+            {hasUnavailableItems ? (
+              <div className="space-y-1.5">
+                <button
+                  type="button"
+                  disabled
+                  className="w-full h-12 rounded-lg bg-surface-container-high text-on-surface-variant/50 font-title-md text-title-md font-semibold uppercase tracking-wider cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <span>Place Order</span>
+                  <span className="font-tabular-num">• {formatPrice(total)}</span>
+                </button>
+                <p className="text-xs text-error text-center font-medium">
+                  Please remove unavailable items before placing order.
+                </p>
+              </div>
+            ) : (
+              <Link
+                href="/checkout"
+                onClick={closeCart}
+                className="w-full h-12 rounded-lg bg-[#582F0E] text-[#FAF7F2] hover:bg-[#7F4F24] font-title-md text-title-md font-semibold uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2 group"
+              >
+                <span>Place Order</span>
+                <span className="font-tabular-num">• {formatPrice(total)}</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </Link>
+            )}
 
             {/* Return Link */}
             <div className="text-center pt-1">

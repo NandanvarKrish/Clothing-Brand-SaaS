@@ -1,7 +1,7 @@
 import { Product, ProductCategory, Collection } from "@/types";
+import { getSupabase } from "@/lib/supabase";
 import { PRODUCTS } from "@/data/products";
 import { COLLECTIONS } from "@/data/collections";
-import { getSupabase } from "@/lib/supabase";
 
 export interface ProductFilterOptions {
   category?: ProductCategory | 'All';
@@ -16,6 +16,7 @@ export interface ProductFilterOptions {
   featured?: boolean;
   bestseller?: boolean;
   newArrival?: boolean;
+  status?: 'draft' | 'published' | 'archived';
   sort?: 'featured' | 'newest' | 'price-asc' | 'price-desc' | 'weight';
   limit?: number;
   offset?: number;
@@ -31,37 +32,171 @@ export interface FilterFacets {
   maxPrice: number;
 }
 
+/**
+ * Transforms a raw Supabase product relational row into the typed frontend Product object.
+ */
+export function transformDbProduct(row: any): Product {
+  const images = (row.product_images || [])
+    .sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0))
+    .map((img: any) => ({
+      id: img.id,
+      url: img.url,
+      alt: img.alt_text || row.name,
+      label: img.label || 'Front',
+      sortOrder: img.sort_order || 0,
+      isPrimary: Boolean(img.is_primary),
+    }));
+
+  const variants = (row.product_variants || [])
+    .filter((v: any) => v.is_active !== false)
+    .map((v: any) => {
+      const inv = Array.isArray(v.inventory_items)
+        ? v.inventory_items[0]
+        : v.inventory_items;
+      const onHand = inv ? Number(inv.quantity_on_hand ?? 0) : 0;
+      const reserved = inv ? Number(inv.quantity_reserved ?? 0) : 0;
+      const stock = Math.max(0, onHand - reserved);
+      return {
+        id: v.id,
+        sku: v.sku,
+        size: v.size,
+        color: v.color_name,
+        stock,
+        price: v.price_override ? Number(v.price_override) : Number(row.price),
+      };
+    });
+
+  const colorsMap = new Map<string, string>();
+  (row.product_variants || []).forEach((v: any) => {
+    if (v.color_name && !colorsMap.has(v.color_name)) {
+      colorsMap.set(v.color_name, v.color_hex || '#000000');
+    }
+  });
+
+  const colors = Array.from(colorsMap.entries()).map(([name, hex]) => ({
+    name,
+    hex,
+    inStock: true,
+  }));
+
+  const sizes: string[] = Array.from(new Set(variants.map((v: any) => v.size as string)));
+
+  const collectionIds = (row.product_collections || [])
+    .map((pc: any) => pc.collections?.slug || pc.collection_id)
+    .filter(Boolean);
+
+  const categoryName = (row.categories?.name || 'All') as ProductCategory;
+
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    subtitle: row.subtitle || '',
+    description: row.description,
+    price: Number(row.price),
+    compareAtPrice: row.compare_at_price ? Number(row.compare_at_price) : undefined,
+    category: categoryName,
+    fabric: row.fabric,
+    fabricOrigin: row.fabric_origin || undefined,
+    weaveTechnique: row.weave_technique || undefined,
+    gsm: row.gsm ? Number(row.gsm) : undefined,
+    edition: row.edition || undefined,
+    badge: row.badge || undefined,
+    featured: Boolean(row.is_featured),
+    bestseller: Boolean(row.is_bestseller),
+    newArrival: Boolean(row.is_new_arrival),
+    status: row.status || (row.is_active ? 'published' : 'draft'),
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    collectionIds: collectionIds.length > 0 ? collectionIds : (row.collection_ids || []),
+    images: images.length > 0 ? images : (row.image_url ? [{ url: row.image_url, alt: row.name, label: 'Front' }] : []),
+    colors,
+    sizes,
+    variants,
+    rating: Number(row.rating || 5.0),
+    reviewCount: Number(row.review_count || 0),
+    details: Array.isArray(row.details) ? row.details : [],
+    care: Array.isArray(row.care) ? row.care : [],
+    shippingInfo: row.shipping_info || undefined,
+  };
+}
+
 export async function getProducts(options: ProductFilterOptions = {}): Promise<Product[]> {
   const supabase = getSupabase();
+  let results: Product[] = [];
+
   if (supabase) {
-    // If Supabase is connected in the future, queries can run here.
-    // For now we transparently use the typed local repository.
+    try {
+      let query = supabase
+        .from('products')
+        .select(`
+          id, name, slug, subtitle, description, price, compare_at_price,
+          fabric, fabric_origin, weave_technique, gsm, edition, badge,
+          is_featured, is_bestseller, is_new_arrival, is_active, status, tags,
+          rating, review_count, details, care, shipping_info,
+          categories(name, slug),
+          product_images(id, url, alt_text, label, sort_order, is_primary),
+          product_variants(id, sku, size, color_name, color_hex, price_override, is_active, inventory_items(quantity_on_hand, quantity_reserved)),
+          product_collections(collection_id, collections(id, slug, title))
+        `);
+
+      if (options.status) {
+        query = query.eq('status', options.status);
+      } else {
+        // Customer-facing default: only published or active
+        query = query.or('is_active.eq.true,status.eq.published');
+      }
+
+      if (options.featured !== undefined) {
+        query = query.eq('is_featured', options.featured);
+      }
+      if (options.bestseller !== undefined) {
+        query = query.eq('is_bestseller', options.bestseller);
+      }
+      if (options.newArrival !== undefined) {
+        query = query.eq('is_new_arrival', options.newArrival);
+      }
+      if (options.minPrice !== undefined) {
+        query = query.gte('price', options.minPrice);
+      }
+      if (options.maxPrice !== undefined) {
+        query = query.lte('price', options.maxPrice);
+      }
+
+      const { data, error } = await query;
+      if (!error && data && data.length > 0) {
+        results = data.map(transformDbProduct);
+      }
+    } catch {
+      // Fallback to static catalog if DB query fails or tables unseeded
+    }
   }
 
-  let results = [...PRODUCTS];
+  // Graceful fallback to static product catalog if DB is unmigrated or empty
+  if (results.length === 0) {
+    results = [...PRODUCTS];
+    if (options.featured !== undefined) {
+      results = results.filter((p) => Boolean(p.featured) === options.featured);
+    }
+    if (options.bestseller !== undefined) {
+      results = results.filter((p) => Boolean(p.bestseller) === options.bestseller);
+    }
+    if (options.newArrival !== undefined) {
+      results = results.filter((p) => Boolean(p.newArrival) === options.newArrival);
+    }
+    if (options.minPrice !== undefined) {
+      results = results.filter((p) => p.price >= options.minPrice!);
+    }
+    if (options.maxPrice !== undefined) {
+      results = results.filter((p) => p.price <= options.maxPrice!);
+    }
+  }
 
-  // Category filter
   if (options.category && options.category !== 'All') {
     results = results.filter((p) => p.category.toLowerCase() === options.category!.toLowerCase());
   }
-
-  // Collection filter
   if (options.collectionId) {
     results = results.filter((p) => p.collectionIds.includes(options.collectionId!));
   }
-
-  // Flag filters
-  if (options.featured !== undefined) {
-    results = results.filter((p) => Boolean(p.featured) === options.featured);
-  }
-  if (options.bestseller !== undefined) {
-    results = results.filter((p) => Boolean(p.bestseller) === options.bestseller);
-  }
-  if (options.newArrival !== undefined) {
-    results = results.filter((p) => Boolean(p.newArrival) === options.newArrival);
-  }
-
-  // Search query
   if (options.search && options.search.trim() !== '') {
     const q = options.search.toLowerCase().trim();
     results = results.filter(
@@ -70,42 +205,26 @@ export async function getProducts(options: ProductFilterOptions = {}): Promise<P
         p.subtitle.toLowerCase().includes(q) ||
         p.description.toLowerCase().includes(q) ||
         p.fabric.toLowerCase().includes(q) ||
+        p.category.toLowerCase().includes(q) ||
         (p.fabricOrigin && p.fabricOrigin.toLowerCase().includes(q)) ||
+        (p.tags || []).some((t) => t.toLowerCase().includes(q)) ||
         p.colors.some((c) => c.name.toLowerCase().includes(q))
     );
   }
-
-  // Price range
-  if (typeof options.minPrice === 'number') {
-    results = results.filter((p) => p.price >= options.minPrice!);
-  }
-  if (typeof options.maxPrice === 'number') {
-    results = results.filter((p) => p.price <= options.maxPrice!);
-  }
-
-  // Colors
   if (options.colors && options.colors.length > 0) {
     results = results.filter((p) =>
       p.colors.some((c) => options.colors!.some((optColor) => c.name.toLowerCase().includes(optColor.toLowerCase())))
     );
   }
-
-  // Sizes
   if (options.sizes && options.sizes.length > 0) {
     results = results.filter((p) => p.sizes.some((s) => options.sizes!.includes(s)));
   }
-
-  // Fabric Origin
   if (options.fabricOrigin && options.fabricOrigin.length > 0) {
     results = results.filter((p) => p.fabricOrigin && options.fabricOrigin!.includes(p.fabricOrigin));
   }
-
-  // Weave Technique
   if (options.weaveTechnique) {
     results = results.filter((p) => p.weaveTechnique === options.weaveTechnique);
   }
-
-  // Sorting
   if (options.sort) {
     switch (options.sort) {
       case 'newest':
@@ -126,7 +245,6 @@ export async function getProducts(options: ProductFilterOptions = {}): Promise<P
         break;
     }
   }
-
   if (typeof options.offset === 'number' && options.offset > 0) {
     results = results.slice(options.offset);
   }
@@ -137,59 +255,159 @@ export async function getProducts(options: ProductFilterOptions = {}): Promise<P
   return results;
 }
 
+export async function getProductBySlugOrId(
+  identifier: string,
+  includeUnpublished = false
+): Promise<Product | null> {
+  const supabase = getSupabase();
+  if (supabase) {
+    try {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier);
+
+      let query = supabase
+        .from('products')
+        .select(`
+          id, name, slug, subtitle, description, price, compare_at_price,
+          fabric, fabric_origin, weave_technique, gsm, edition, badge,
+          is_featured, is_bestseller, is_new_arrival, is_active, status, tags,
+          rating, review_count, details, care, shipping_info,
+          categories(name, slug),
+          product_images(id, url, alt_text, label, sort_order, is_primary),
+          product_variants(id, sku, size, color_name, color_hex, price_override, is_active, inventory_items(quantity_on_hand, quantity_reserved)),
+          product_collections(collection_id, collections(id, slug, title))
+        `);
+
+      if (isUuid) {
+        query = query.eq('id', identifier);
+      } else {
+        query = query.eq('slug', identifier);
+      }
+
+      if (!includeUnpublished) {
+        query = query.or('is_active.eq.true,status.eq.published');
+      }
+
+      const { data, error } = await query.maybeSingle();
+      if (!error && data) {
+        return transformDbProduct(data);
+      }
+
+      // If slug search missed and was not recognized as UUID, try querying by id
+      if (!isUuid) {
+        let fallbackQuery = supabase
+          .from('products')
+          .select(`
+            id, name, slug, subtitle, description, price, compare_at_price,
+            fabric, fabric_origin, weave_technique, gsm, edition, badge,
+            is_featured, is_bestseller, is_new_arrival, is_active, status, tags,
+            rating, review_count, details, care, shipping_info,
+            categories(name, slug),
+            product_images(id, url, alt_text, label, sort_order, is_primary),
+            product_variants(id, sku, size, color_name, color_hex, price_override, is_active, inventory_items(quantity_on_hand, quantity_reserved)),
+            product_collections(collection_id, collections(id, slug, title))
+          `)
+          .eq('id', identifier);
+
+        if (!includeUnpublished) {
+          fallbackQuery = fallbackQuery.or('is_active.eq.true,status.eq.published');
+        }
+
+        const { data: fallbackData } = await fallbackQuery.maybeSingle();
+        if (fallbackData) {
+          return transformDbProduct(fallbackData);
+        }
+      }
+    } catch {
+      // Fall through to static product catalog
+    }
+  }
+
+  // Fallback to static catalog
+  const staticProduct = PRODUCTS.find((p) => p.slug === identifier || p.id === identifier);
+  return staticProduct || null;
+}
+
 export async function getProductBySlug(slug: string): Promise<Product | null> {
-  const product = PRODUCTS.find((p) => p.slug === slug);
-  return product || null;
+  return getProductBySlugOrId(slug);
 }
 
 export async function getProductById(id: string): Promise<Product | null> {
-  const product = PRODUCTS.find((p) => p.id === id);
-  return product || null;
+  return getProductBySlugOrId(id);
 }
 
 export async function getBestsellers(): Promise<Product[]> {
-  return PRODUCTS.filter((p) => p.bestseller);
+  return getProducts({ bestseller: true });
 }
 
 export async function getNewArrivals(): Promise<Product[]> {
-  return PRODUCTS.filter((p) => p.newArrival);
+  return getProducts({ newArrival: true });
 }
 
 export async function getRelatedProducts(productId: string, limit: number = 3): Promise<Product[]> {
-  const current = PRODUCTS.find((p) => p.id === productId);
-  if (!current) return PRODUCTS.slice(0, limit);
+  const current = await getProductBySlugOrId(productId);
+  if (!current) {
+    const list = await getProducts({ limit });
+    return list;
+  }
 
-  const related = PRODUCTS.filter(
-    (p) => p.id !== productId && (p.category === current.category || p.collectionIds.some((cid) => current.collectionIds.includes(cid)))
+  const all = await getProducts();
+  const related = all.filter(
+    (p) =>
+      p.id !== current.id &&
+      (p.category === current.category ||
+        p.collectionIds.some((cid) => current.collectionIds.includes(cid)))
   );
 
   return related.slice(0, limit);
 }
 
 export async function getCollections(): Promise<Collection[]> {
-  // Augment collections with dynamic itemCount calculated from actual products
-  return COLLECTIONS.map((c) => {
-    const count = PRODUCTS.filter((p) => p.collectionIds.includes(c.slug)).length;
-    return {
-      ...c,
-      itemCount: count > 0 ? count : c.itemCount,
-    };
-  });
+  const supabase = getSupabase();
+  if (!supabase) return COLLECTIONS;
+
+  try {
+    const { data, error } = await supabase
+      .from('collections')
+      .select('id, slug, title, tagline, description, image_url, edition_badge, is_active')
+      .eq('is_active', true);
+
+    if (error || !data || data.length === 0) {
+      return COLLECTIONS;
+    }
+
+    const { data: pcData } = await supabase
+      .from('product_collections')
+      .select('collection_id');
+
+    const counts = new Map<string, number>();
+    (pcData || []).forEach((pc: any) => {
+      counts.set(pc.collection_id, (counts.get(pc.collection_id) || 0) + 1);
+    });
+
+    return data.map((c: any) => ({
+      id: c.id,
+      slug: c.slug,
+      title: c.title,
+      tagline: c.tagline || '',
+      description: c.description || '',
+      image: c.image_url || '',
+      editionBadge: c.edition_badge,
+      itemCount: counts.get(c.id) || 0,
+    }));
+  } catch {
+    return COLLECTIONS;
+  }
 }
 
 export async function getCollectionBySlug(slug: string): Promise<Collection | null> {
-  const col = COLLECTIONS.find((c) => c.slug === slug);
-  if (!col) return null;
-  const count = PRODUCTS.filter((p) => p.collectionIds.includes(col.slug)).length;
-  return {
-    ...col,
-    itemCount: count > 0 ? count : col.itemCount,
-  };
+  const list = await getCollections();
+  return list.find((c) => c.slug === slug) || null;
 }
 
 export async function getFilterFacets(): Promise<FilterFacets> {
+  const products = await getProducts();
   const categoriesMap = new Map<ProductCategory, number>();
-  categoriesMap.set('All', PRODUCTS.length);
+  categoriesMap.set('All', products.length);
 
   const colorsMap = new Map<string, string>();
   const sizesSet = new Set<string>();
@@ -199,49 +417,39 @@ export async function getFilterFacets(): Promise<FilterFacets> {
   let minPrice = Infinity;
   let maxPrice = -Infinity;
 
-  PRODUCTS.forEach((p) => {
-    // Categories
-    categoriesMap.set(p.category, (categoriesMap.get(p.category) || 0) + 1);
+  products.forEach((p) => {
+    if (p.category) {
+      categoriesMap.set(p.category, (categoriesMap.get(p.category) || 0) + 1);
+    }
 
-    // Colors
-    p.colors.forEach((c) => {
+    (p.colors || []).forEach((c) => {
       if (!colorsMap.has(c.name)) {
         colorsMap.set(c.name, c.hex);
       }
     });
 
-    // Sizes
-    p.sizes.forEach((s) => sizesSet.add(s));
-
-    // Fabrics
+    (p.sizes || []).forEach((s) => sizesSet.add(s));
     if (p.fabricOrigin) fabricsSet.add(p.fabricOrigin);
-
-    // Weaves
     if (p.weaveTechnique) weavesSet.add(p.weaveTechnique);
 
-    // Price
     if (p.price < minPrice) minPrice = p.price;
     if (p.price > maxPrice) maxPrice = p.price;
   });
 
-  const categories = Array.from(categoriesMap.entries()).map(([name, count]) => ({
-    name,
-    count,
-  }));
-
-  const colors = Array.from(colorsMap.entries()).map(([name, hex]) => ({
-    name,
-    hex,
-  }));
-
   return {
-    categories,
-    colors,
+    categories: Array.from(categoriesMap.entries()).map(([name, count]) => ({
+      name,
+      count,
+    })),
+    colors: Array.from(colorsMap.entries()).map(([name, hex]) => ({
+      name,
+      hex,
+    })),
     sizes: Array.from(sizesSet),
     fabrics: Array.from(fabricsSet),
     weaves: Array.from(weavesSet),
     minPrice: minPrice === Infinity ? 0 : minPrice,
-    maxPrice: maxPrice === -Infinity ? 10000 : maxPrice,
+    maxPrice: maxPrice === -Infinity ? 8000 : maxPrice,
   };
 }
 
@@ -255,23 +463,60 @@ export interface StockValidationResult {
   errors: { sku: string; requested: number; available: number }[];
 }
 
-export function validateStock(items: StockValidationItem[]): StockValidationResult {
+export async function validateStock(items: StockValidationItem[]): Promise<StockValidationResult> {
   const errors: { sku: string; requested: number; available: number }[] = [];
+  const supabase = getSupabase();
 
-  for (const item of items) {
-    let variantFound = false;
-    for (const prod of PRODUCTS) {
-      const v = prod.variants.find((variant) => variant.sku === item.sku);
-      if (v) {
-        variantFound = true;
-        if (v.stock < item.quantity) {
-          errors.push({ sku: item.sku, requested: item.quantity, available: v.stock });
+  if (supabase) {
+    try {
+      const skus = items.map((i) => i.sku);
+      const { data, error } = await supabase
+        .from('product_variants')
+        .select('sku, inventory_items(quantity_on_hand, quantity_reserved)')
+        .in('sku', skus);
+
+      if (!error && data && data.length > 0) {
+        const stockMap = new Map<string, number>();
+        data.forEach((v: any) => {
+          const inv = Array.isArray(v.inventory_items) ? v.inventory_items[0] : v.inventory_items;
+          const onHand = inv ? Number(inv.quantity_on_hand ?? 0) : 0;
+          const reserved = inv ? Number(inv.quantity_reserved ?? 0) : 0;
+          stockMap.set(v.sku, Math.max(0, onHand - reserved));
+        });
+
+        for (const item of items) {
+          const available = stockMap.get(item.sku);
+          if (available === undefined) {
+            errors.push({ sku: item.sku, requested: item.quantity, available: 0 });
+          } else if (available < item.quantity) {
+            errors.push({ sku: item.sku, requested: item.quantity, available });
+          }
         }
+
+        return {
+          valid: errors.length === 0,
+          errors,
+        };
+      }
+    } catch {
+      // Fallback below
+    }
+  }
+
+  // Fallback stock check against static catalog
+  for (const item of items) {
+    let foundStock: number | undefined;
+    for (const p of PRODUCTS) {
+      const v = p.variants.find((v) => v.sku.toLowerCase() === item.sku.toLowerCase() || v.id === item.sku);
+      if (v) {
+        foundStock = v.stock;
         break;
       }
     }
-    if (!variantFound) {
+    if (foundStock === undefined) {
       errors.push({ sku: item.sku, requested: item.quantity, available: 0 });
+    } else if (foundStock < item.quantity) {
+      errors.push({ sku: item.sku, requested: item.quantity, available: foundStock });
     }
   }
 
@@ -301,7 +546,6 @@ export function checkPincodeDelivery(pincode: string): PincodeDeliveryInfo {
     };
   }
 
-  // Intelligent demo mapping for common Indian PIN code regions
   let city = 'Metro Hub';
   let days = '2–3 business days';
 

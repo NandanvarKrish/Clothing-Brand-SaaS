@@ -19,13 +19,14 @@ export default function CartPage() {
     freeShippingThreshold,
     freeShippingProgress,
     total,
+    hasUnavailableItems,
     updateQuantity,
     removeItem,
     applyCoupon,
     removeCoupon,
   } = useCart();
 
-  const [couponInput, setCouponInput] = useState(appliedCoupon || "FESTIVE10");
+  const [couponInput, setCouponInput] = useState(appliedCoupon || "");
 
   const handleApplyCoupon = (e: React.FormEvent) => {
     e.preventDefault();
@@ -143,6 +144,16 @@ export default function CartPage() {
                 <div className="mt-3 font-tabular-num text-tabular-num text-primary font-bold">
                   {formatPrice(item.price)} each
                 </div>
+
+                {item.isAvailable === false ? (
+                  <div className="mt-2 text-xs text-error bg-error-container/20 px-2.5 py-1 rounded font-medium inline-block">
+                    {item.message || "This silhouette is currently unavailable."}
+                  </div>
+                ) : item.message ? (
+                  <div className="mt-2 text-xs text-[#BC6C25] bg-[#F9F0E6] px-2.5 py-1 rounded font-medium inline-block">
+                    {item.message}
+                  </div>
+                ) : null}
               </div>
 
               {/* Quantity Controls & Remove */}
@@ -274,13 +285,28 @@ export default function CartPage() {
           </div>
 
           {/* Proceed to Checkout CTA */}
-          <Link
-            href="/checkout"
-            className="w-full h-12 rounded-lg bg-primary-container hover:bg-[#7F4F24] text-on-primary font-title-md text-title-md font-semibold uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2 group"
-          >
-            <span>Proceed to Checkout</span>
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </Link>
+          {hasUnavailableItems ? (
+            <div className="space-y-2">
+              <button
+                type="button"
+                disabled
+                className="w-full h-12 rounded-lg bg-surface-container-high text-on-surface-variant/50 font-title-md text-title-md font-semibold uppercase tracking-wider cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <span>Proceed to Checkout</span>
+              </button>
+              <p className="text-body-sm text-error text-center font-medium">
+                Please remove unavailable pieces from your bag to continue.
+              </p>
+            </div>
+          ) : (
+            <Link
+              href="/checkout"
+              className="w-full h-12 rounded-lg bg-primary-container hover:bg-[#7F4F24] text-on-primary font-title-md text-title-md font-semibold uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2 group"
+            >
+              <span>Proceed to Checkout</span>
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </Link>
+          )}
 
           <p className="font-body-sm text-[11px] text-center text-on-surface-variant">
             Small-batch handcrafted garments with 14-day complimentary exchanges.

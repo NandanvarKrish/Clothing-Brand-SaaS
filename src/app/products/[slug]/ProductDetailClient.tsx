@@ -83,13 +83,13 @@ export function ProductDetailClient({ product, relatedProducts }: ProductDetailC
     router.push("/checkout");
   };
 
-  // Find active variant stock
+  // Find active variant stock (zero if no matching variant)
   const activeVariant = product.variants.find(
     (v) =>
       v.size.toLowerCase() === selectedSize.toLowerCase() &&
       v.color.toLowerCase() === selectedColor.toLowerCase()
   );
-  const stockCount = activeVariant ? activeVariant.stock : 8;
+  const stockCount = activeVariant ? Number(activeVariant.stock) : 0;
 
   return (
     <div className="w-full bg-surface pb-24">
@@ -264,6 +264,11 @@ export function ProductDetailClient({ product, relatedProducts }: ProductDetailC
                 <span className="font-headline-lg text-headline-lg font-bold text-primary font-tabular-num">
                   {formatPrice(product.price)}
                 </span>
+                {product.compareAtPrice && product.compareAtPrice > product.price && (
+                  <span className="font-title-md text-title-md line-through text-on-surface-variant/60 font-tabular-num">
+                    {formatPrice(product.compareAtPrice)}
+                  </span>
+                )}
                 <span className="font-body-md text-body-md text-on-surface-variant">
                   Taxes included. Free express air shipping.
                 </span>
