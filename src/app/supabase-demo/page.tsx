@@ -1,11 +1,19 @@
 import { createClient } from "@/utils/supabase/server";
 import { cookies } from "next/headers";
 
+export const dynamic = "force-dynamic";
+
 export default async function Page() {
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
 
-  const { data: todos } = await supabase.from("todos").select();
+  let todos: { id: string | number; name: string }[] | null = null;
+  try {
+    const { data } = await supabase.from("todos").select();
+    todos = data;
+  } catch {
+    todos = null;
+  }
 
   return (
     <div className="p-8 max-w-xl mx-auto">
