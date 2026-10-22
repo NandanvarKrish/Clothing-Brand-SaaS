@@ -33,6 +33,14 @@ export interface FilterFacets {
 }
 
 /**
+ * Helper to check if a product is actively published and purchasable.
+ */
+export function isProductPublished(product: Product | null | undefined): boolean {
+  if (!product) return false;
+  return product.status === 'published' || (!product.status && (product as any).is_active !== false);
+}
+
+/**
  * Transforms a raw Supabase product relational row into the typed frontend Product object.
  */
 export function transformDbProduct(row: any): Product {
@@ -53,9 +61,22 @@ export function transformDbProduct(row: any): Product {
       const inv = Array.isArray(v.inventory_items)
         ? v.inventory_items[0]
         : v.inventory_items;
-      const onHand = inv ? Number(inv.quantity_on_hand ?? 0) : 0;
-      const reserved = inv ? Number(inv.quantity_reserved ?? 0) : 0;
-      const stock = Math.max(0, onHand - reserved);
+
+      let stock: number;
+      if (inv && (inv.quantity_on_hand !== null && inv.quantity_on_hand !== undefined)) {
+        const onHand = Number(inv.quantity_on_hand ?? 0);
+        const reserved = Number(inv.quantity_reserved ?? 0);
+        stock = Math.max(0, onHand - reserved);
+      } else if (v.stock !== undefined && v.stock !== null) {
+        stock = Math.max(0, Number(v.stock));
+      } else {
+        // Fallback to static catalog variant if DB inventory is untracked/missing
+        const fallbackVariant = PRODUCTS.flatMap((p) => p.variants).find(
+          (sv) => sv.sku?.toLowerCase() === v.sku?.toLowerCase() || sv.id === v.id
+        );
+        stock = fallbackVariant ? fallbackVariant.stock : 10;
+      }
+
       return {
         id: v.id,
         sku: v.sku,
@@ -73,11 +94,17 @@ export function transformDbProduct(row: any): Product {
     }
   });
 
-  const colors = Array.from(colorsMap.entries()).map(([name, hex]) => ({
-    name,
-    hex,
-    inStock: true,
-  }));
+  const colors = Array.from(colorsMap.entries()).map(([name, hex]) => {
+    const colorVariants = variants.filter(
+      (v) => v.color.toLowerCase() === name.toLowerCase()
+    );
+    const colorStock = colorVariants.reduce((sum, v) => sum + (v.stock || 0), 0);
+    return {
+      name,
+      hex,
+      inStock: colorVariants.length === 0 ? true : colorStock > 0,
+    };
+  });
 
   const sizes: string[] = Array.from(new Set(variants.map((v: any) => v.size as string)));
 
@@ -105,7 +132,7 @@ export function transformDbProduct(row: any): Product {
     featured: Boolean(row.is_featured),
     bestseller: Boolean(row.is_bestseller),
     newArrival: Boolean(row.is_new_arrival),
-    status: row.status || (row.is_active ? 'published' : 'draft'),
+    status: row.status || (row.is_active === false ? 'draft' : 'published'),
     tags: Array.isArray(row.tags) ? row.tags : [],
     collectionIds: collectionIds.length > 0 ? collectionIds : (row.collection_ids || []),
     images: images.length > 0 ? images : (row.image_url ? [{ url: row.image_url, alt: row.name, label: 'Front' }] : []),
@@ -173,7 +200,7 @@ export async function getProducts(options: ProductFilterOptions = {}): Promise<P
 
   // Graceful fallback to static product catalog if DB is unmigrated or empty
   if (results.length === 0) {
-    results = [...PRODUCTS];
+    results = PRODUCTS.map((p) => ({ ...p, status: p.status || 'published' }));
     if (options.featured !== undefined) {
       results = results.filter((p) => Boolean(p.featured) === options.featured);
     }
@@ -324,7 +351,10 @@ export async function getProductBySlugOrId(
 
   // Fallback to static catalog
   const staticProduct = PRODUCTS.find((p) => p.slug === identifier || p.id === identifier);
-  return staticProduct || null;
+  if (staticProduct) {
+    return { ...staticProduct, status: staticProduct.status || 'published' };
+  }
+  return null;
 }
 
 export async function getProductBySlug(slug: string): Promise<Product | null> {
@@ -479,17 +509,40 @@ export async function validateStock(items: StockValidationItem[]): Promise<Stock
         const stockMap = new Map<string, number>();
         data.forEach((v: any) => {
           const inv = Array.isArray(v.inventory_items) ? v.inventory_items[0] : v.inventory_items;
-          const onHand = inv ? Number(inv.quantity_on_hand ?? 0) : 0;
-          const reserved = inv ? Number(inv.quantity_reserved ?? 0) : 0;
-          stockMap.set(v.sku, Math.max(0, onHand - reserved));
+          if (inv && (inv.quantity_on_hand !== null && inv.quantity_on_hand !== undefined)) {
+            const onHand = Number(inv.quantity_on_hand ?? 0);
+            const reserved = Number(inv.quantity_reserved ?? 0);
+            stockMap.set(v.sku.toLowerCase(), Math.max(0, onHand - reserved));
+          } else {
+            const sv = PRODUCTS.flatMap((p) => p.variants).find(
+              (s) => s.sku.toLowerCase() === v.sku.toLowerCase()
+            );
+            stockMap.set(v.sku.toLowerCase(), sv ? sv.stock : 10);
+          }
         });
 
         for (const item of items) {
-          const available = stockMap.get(item.sku);
-          if (available === undefined) {
-            errors.push({ sku: item.sku, requested: item.quantity, available: 0 });
-          } else if (available < item.quantity) {
-            errors.push({ sku: item.sku, requested: item.quantity, available });
+          const skuKey = item.sku.toLowerCase();
+          const available = stockMap.get(skuKey);
+          if (available !== undefined) {
+            if (available < item.quantity) {
+              errors.push({ sku: item.sku, requested: item.quantity, available });
+            }
+          } else {
+            // Check static catalog fallback for items not returned by database query
+            let foundStock: number | undefined;
+            for (const p of PRODUCTS) {
+              const v = p.variants.find((v) => v.sku.toLowerCase() === skuKey || v.id === item.sku);
+              if (v) {
+                foundStock = v.stock;
+                break;
+              }
+            }
+            if (foundStock === undefined) {
+              errors.push({ sku: item.sku, requested: item.quantity, available: 0 });
+            } else if (foundStock < item.quantity) {
+              errors.push({ sku: item.sku, requested: item.quantity, available: foundStock });
+            }
           }
         }
 
@@ -506,8 +559,9 @@ export async function validateStock(items: StockValidationItem[]): Promise<Stock
   // Fallback stock check against static catalog
   for (const item of items) {
     let foundStock: number | undefined;
+    const skuKey = item.sku.toLowerCase();
     for (const p of PRODUCTS) {
-      const v = p.variants.find((v) => v.sku.toLowerCase() === item.sku.toLowerCase() || v.id === item.sku);
+      const v = p.variants.find((v) => v.sku.toLowerCase() === skuKey || v.id === item.sku);
       if (v) {
         foundStock = v.stock;
         break;

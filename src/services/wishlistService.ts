@@ -14,7 +14,9 @@ export async function validateAndSyncWishlist(
   for (const item of items) {
     const product = await getProductBySlugOrId(item.productId);
 
-    if (!product || product.status !== "published") {
+    const isPublished = product && (product.status ? product.status === "published" : true);
+
+    if (!product || !isPublished) {
       result.push({
         productId: item.productId,
         slug: product?.slug || "",

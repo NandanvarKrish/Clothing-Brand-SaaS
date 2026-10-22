@@ -126,7 +126,8 @@ export async function validateAndRecalculateCart(
     const itemKey = `${raw.productId}-${raw.size}-${raw.color}`.toLowerCase().replace(/\s+/g, "-");
 
     // Case 1: Product missing or unpublished
-    if (!product || product.status !== "published") {
+    const isPublished = product && (product.status ? product.status === "published" : true);
+    if (!product || !isPublished) {
       hasUnavailable = true;
       validatedItems.push({
         id: raw.id || itemKey,
@@ -150,12 +151,20 @@ export async function validateAndRecalculateCart(
     }
 
     // Case 2: Variant lookup
-    const variant = product.variants.find(
+    let variant = product.variants.find(
       (v) =>
         (raw.variantId && v.id === raw.variantId) ||
         (raw.sku && v.sku.toLowerCase() === raw.sku.toLowerCase()) ||
         (v.size.toLowerCase() === raw.size.toLowerCase() && v.color.toLowerCase() === raw.color.toLowerCase())
     );
+
+    // If no direct variant match by color, check if single variant matches by size
+    if (!variant && raw.size) {
+      const sizeVariants = product.variants.filter((v) => v.size.toLowerCase() === raw.size.toLowerCase());
+      if (sizeVariants.length === 1) {
+        variant = sizeVariants[0];
+      }
+    }
 
     if (!variant) {
       hasUnavailable = true;
@@ -184,7 +193,9 @@ export async function validateAndRecalculateCart(
     const availableStock = Math.max(0, Number(variant.stock || 0));
     const authoritativePrice = Number(variant.price || product.price);
     const priceChanged = raw.price !== undefined && Number(raw.price) !== authoritativePrice;
-    const colorObj = product.colors.find((c) => c.name.toLowerCase() === raw.color.toLowerCase());
+    const colorObj = product.colors.find(
+      (c) => c.name.toLowerCase() === (variant!.color || raw.color).toLowerCase()
+    );
 
     if (availableStock === 0) {
       hasUnavailable = true;

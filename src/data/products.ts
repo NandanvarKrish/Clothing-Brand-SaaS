@@ -19,6 +19,7 @@ export const PRODUCTS: Product[] = [
     featured: true,
     bestseller: true,
     newArrival: false,
+    status: "published",
     collectionIds: ["autumn-dusk-2024", "everyday-linen", "bestsellers"],
     rating: 4.9,
     reviewCount: 34,
@@ -93,6 +94,7 @@ export const PRODUCTS: Product[] = [
     featured: true,
     bestseller: true,
     newArrival: false,
+    status: "published",
     collectionIds: ["autumn-dusk-2024", "artisanal-silk", "bestsellers"],
     rating: 5.0,
     reviewCount: 42,
@@ -159,6 +161,7 @@ export const PRODUCTS: Product[] = [
     featured: true,
     bestseller: false,
     newArrival: true,
+    status: "published",
     collectionIds: ["autumn-dusk-2024", "sculpted-outerwear", "new-arrivals"],
     rating: 4.8,
     reviewCount: 19,
@@ -224,6 +227,7 @@ export const PRODUCTS: Product[] = [
     featured: true,
     bestseller: false,
     newArrival: true,
+    status: "published",
     collectionIds: ["everyday-linen", "autumn-dusk-2024", "new-arrivals"],
     rating: 4.7,
     reviewCount: 28,
@@ -283,6 +287,7 @@ export const PRODUCTS: Product[] = [
     featured: true,
     bestseller: true,
     newArrival: false,
+    status: "published",
     collectionIds: ["everyday-linen", "bestsellers"],
     rating: 4.9,
     reviewCount: 31,
@@ -301,7 +306,7 @@ export const PRODUCTS: Product[] = [
     colors: [
       { name: "Charcoal", hex: "#2B2D2F", inStock: true },
       { name: "Warm Taupe", hex: "#8B7D71", inStock: true },
-      { name: "Off-White", hex: "#F8F6F0", inStock: true },
+      { name: "Off-White", hex: "#F8F6F0", inStock: false },
     ],
     sizes: ["28", "30", "32", "34", "36"],
     variants: [
@@ -343,6 +348,7 @@ export const PRODUCTS: Product[] = [
     featured: true,
     bestseller: true,
     newArrival: false,
+    status: "published",
     collectionIds: ["everyday-linen", "bestsellers"],
     rating: 4.9,
     reviewCount: 39,
@@ -361,7 +367,7 @@ export const PRODUCTS: Product[] = [
     colors: [
       { name: "Olive Drab", hex: "#52523F", inStock: true },
       { name: "Warm Cream", hex: "#F4ECE1", inStock: true },
-      { name: "Espresso", hex: "#3D1B00", inStock: true },
+      { name: "Espresso", hex: "#3D1B00", inStock: false },
     ],
     sizes: ["XS", "S", "M", "L", "XL"],
     variants: [
@@ -403,6 +409,7 @@ export const PRODUCTS: Product[] = [
     featured: false,
     bestseller: false,
     newArrival: true,
+    status: "published",
     collectionIds: ["artisanal-silk", "autumn-dusk-2024", "new-arrivals"],
     rating: 4.8,
     reviewCount: 14,
@@ -420,7 +427,7 @@ export const PRODUCTS: Product[] = [
     ],
     colors: [
       { name: "Amber Ochre", hex: "#C68B59", inStock: true },
-      { name: "Raw Ecru", hex: "#EBE3D5", inStock: true },
+      { name: "Raw Ecru", hex: "#EBE3D5", inStock: false },
     ],
     sizes: ["XS", "S", "M", "L"],
     variants: [
@@ -459,6 +466,7 @@ export const PRODUCTS: Product[] = [
     featured: false,
     bestseller: false,
     newArrival: true,
+    status: "published",
     collectionIds: ["autumn-dusk-2024", "artisanal-silk", "new-arrivals"],
     rating: 5.0,
     reviewCount: 22,
@@ -476,7 +484,7 @@ export const PRODUCTS: Product[] = [
     ],
     colors: [
       { name: "Terracotta Dusk", hex: "#B85D43", inStock: true },
-      { name: "Midnight Charcoal", hex: "#1F2421", inStock: true },
+      { name: "Midnight Charcoal", hex: "#1F2421", inStock: false },
     ],
     sizes: ["XS", "S", "M", "L"],
     variants: [
@@ -515,6 +523,7 @@ export const PRODUCTS: Product[] = [
     featured: false,
     bestseller: false,
     newArrival: false,
+    status: "published",
     collectionIds: ["everyday-linen", "autumn-dusk-2024"],
     rating: 4.6,
     reviewCount: 16,
@@ -532,7 +541,7 @@ export const PRODUCTS: Product[] = [
     ],
     colors: [
       { name: "Natural Flax", hex: "#D8C7B5", inStock: true },
-      { name: "Muted Olive", hex: "#555A46", inStock: true },
+      { name: "Muted Olive", hex: "#555A46", inStock: false },
     ],
     sizes: ["28", "30", "32", "34", "36"],
     variants: [
@@ -570,6 +579,7 @@ export const PRODUCTS: Product[] = [
     featured: false,
     bestseller: false,
     newArrival: false,
+    status: "published",
     collectionIds: ["everyday-linen"],
     rating: 4.8,
     reviewCount: 25,
@@ -587,7 +597,7 @@ export const PRODUCTS: Product[] = [
     ],
     colors: [
       { name: "Sandstone", hex: "#D6C7B2", inStock: true },
-      { name: "Vintage White", hex: "#FAF8F5", inStock: true },
+      { name: "Vintage White", hex: "#FAF8F5", inStock: false },
     ],
     sizes: ["XS", "S", "M", "L", "XL"],
     variants: [
@@ -627,6 +637,7 @@ export const PRODUCTS: Product[] = [
     featured: true,
     bestseller: false,
     newArrival: true,
+    status: "published",
     collectionIds: ["autumn-dusk-2024", "new-arrivals"],
     rating: 4.9,
     reviewCount: 18,
@@ -645,7 +656,7 @@ export const PRODUCTS: Product[] = [
     colors: [
       { name: "Oatmeal Heather", hex: "#D7CEBE", inStock: true },
       { name: "Deep Charcoal", hex: "#2E3033", inStock: true },
-      { name: "Raw Hazelnut", hex: "#7E5E43", inStock: true },
+      { name: "Raw Hazelnut", hex: "#7E5E43", inStock: false },
     ],
     sizes: ["XS", "S", "M", "L", "XL"],
     variants: [
@@ -687,6 +698,7 @@ export const PRODUCTS: Product[] = [
     featured: false,
     bestseller: false,
     newArrival: false,
+    status: "published",
     collectionIds: ["everyday-linen", "autumn-dusk-2024"],
     rating: 4.8,
     reviewCount: 21,
@@ -704,7 +716,7 @@ export const PRODUCTS: Product[] = [
     ],
     colors: [
       { name: "Natural Ecru", hex: "#EDE6D6", inStock: true },
-      { name: "Washed Indigo", hex: "#32445A", inStock: true },
+      { name: "Washed Indigo", hex: "#32445A", inStock: false },
     ],
     sizes: ["XS", "S", "M", "L", "XL"],
     variants: [
@@ -744,6 +756,7 @@ export const PRODUCTS: Product[] = [
     featured: true,
     bestseller: false,
     newArrival: true,
+    status: "published",
     collectionIds: ["autumn-dusk-2024", "sculpted-outerwear", "new-arrivals"],
     rating: 5.0,
     reviewCount: 17,

@@ -1,7 +1,7 @@
 import React from "react";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getProductBySlugOrId, getRelatedProducts, getProducts } from "@/services/productService";
+import { getProductBySlugOrId, getRelatedProducts, getProducts, isProductPublished } from "@/services/productService";
 import { ProductDetailClient } from "./ProductDetailClient";
 
 interface ProductPageProps {
@@ -19,7 +19,7 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
   const product = await getProductBySlugOrId(params.slug);
-  if (!product || product.status !== "published") {
+  if (!product || !isProductPublished(product)) {
     return {
       title: "Garment Not Found | Vélure Atelier",
     };
@@ -39,7 +39,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
 export default async function ProductPage({ params }: ProductPageProps) {
   const product = await getProductBySlugOrId(params.slug);
 
-  if (!product || product.status !== "published") {
+  if (!product || !isProductPublished(product)) {
     notFound();
   }
 

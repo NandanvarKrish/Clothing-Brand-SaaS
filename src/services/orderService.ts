@@ -141,7 +141,10 @@ export async function createOrder(
 
     const hasQuantityMismatch = input.items.some((raw) => {
       const match = cartValidation.items.find(
-        (i) => i.productId === raw.productId && i.size === raw.size && i.color === raw.color
+        (i) =>
+          i.productId === raw.productId &&
+          i.size.toLowerCase() === raw.size.toLowerCase() &&
+          i.color.toLowerCase() === raw.color.toLowerCase()
       );
       return match && raw.quantity > match.quantity;
     });
