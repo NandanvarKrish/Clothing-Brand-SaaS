@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getProductBySlugOrId, getRelatedProducts } from "@/services/productService";
+import { getProductBySlugOrId, getRelatedProducts, isProductPublished } from "@/services/productService";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +11,7 @@ export async function GET(
     const { slug } = params;
     const product = await getProductBySlugOrId(slug);
 
-    if (!product || product.status !== "published") {
+    if (!product || !isProductPublished(product)) {
       return NextResponse.json(
         { success: false, error: "Product not found" },
         { status: 404 }
