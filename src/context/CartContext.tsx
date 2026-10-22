@@ -196,11 +196,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     isMutatingRef.current = true;
 
     try {
-      const variant = product.variants.find(
+      let variant = product.variants.find(
         (v) =>
           v.size.toLowerCase() === size.toLowerCase() &&
           v.color.toLowerCase() === color.toLowerCase()
       );
+
+      if (!variant && size) {
+        const sizeVariants = product.variants.filter((v) => v.size.toLowerCase() === size.toLowerCase());
+        if (sizeVariants.length === 1) {
+          variant = sizeVariants[0];
+        }
+      }
 
       const maxStock = variant ? Number(variant.stock) : 0;
       if (maxStock <= 0) {

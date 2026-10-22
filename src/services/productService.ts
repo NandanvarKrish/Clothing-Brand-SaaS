@@ -96,9 +96,9 @@ export function transformDbProduct(row: any): Product {
 
   const colors = Array.from(colorsMap.entries()).map(([name, hex]) => {
     const colorVariants = variants.filter(
-      (v) => v.color.toLowerCase() === name.toLowerCase()
+      (v: any) => v.color.toLowerCase() === name.toLowerCase()
     );
-    const colorStock = colorVariants.reduce((sum, v) => sum + (v.stock || 0), 0);
+    const colorStock = colorVariants.reduce((sum: number, v: any) => sum + (v.stock || 0), 0);
     return {
       name,
       hex,

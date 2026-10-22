@@ -468,12 +468,6 @@ export function ProductDetailClient({ product, relatedProducts }: ProductDetailC
                     (UPI / Cards)
                   </span>
                 </button>
-                  <Zap className="w-4 h-4 text-secondary" />
-                  <span>Instant Express Checkout</span>
-                  <span className="font-label-sm text-label-sm text-on-surface-variant font-normal">
-                    (UPI / Cards)
-                  </span>
-                </button>
 
                 <button
                   type="button"
