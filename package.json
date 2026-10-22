@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "node tests/product-service.test.mjs && node tests/cart-wishlist.test.mjs && node tests/checkout-order.test.mjs && node tests/payment-integration.test.mjs"
+    "test": "node tests/product-service.test.mjs && node tests/cart-wishlist.test.mjs && node tests/checkout-order.test.mjs && node tests/payment-integration.test.mjs && node tests/availability-inventory.test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
