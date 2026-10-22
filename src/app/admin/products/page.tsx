@@ -19,6 +19,7 @@ import {
   Search,
   Package,
   Layers,
+  FileText,
   Tag,
   Check,
   ChevronDown,

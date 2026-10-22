@@ -42,8 +42,8 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  // Protect /account and its subroutes
-  if (!user && pathname.startsWith("/account")) {
+  // Protect /account and /admin subroutes
+  if (!user && (pathname.startsWith("/account") || pathname.startsWith("/admin"))) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     loginUrl.searchParams.set("redirectTo", pathname);

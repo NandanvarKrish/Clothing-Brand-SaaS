@@ -113,6 +113,39 @@ export interface WishlistItem {
 
 export type PaymentMethod = 'upi' | 'card' | 'netbanking' | 'cod';
 
+export type PaymentStatus =
+  | 'pending'
+  | 'authorized'
+  | 'captured'
+  | 'paid'
+  | 'failed'
+  | 'refunded'
+  | 'partially_refunded';
+
+export type FulfillmentStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'tailoring'
+  | 'processing'
+  | 'inspection'
+  | 'dispatched'
+  | 'shipped'
+  | 'delivered'
+  | 'cancellation_requested'
+  | 'cancelled'
+  | 'return_requested'
+  | 'returned';
+
+export type ReturnStatus =
+  | 'requested'
+  | 'approved'
+  | 'in_transit'
+  | 'received_at_atelier'
+  | 'inspected_passed'
+  | 'inspected_failed'
+  | 'refunded'
+  | 'rejected';
+
 export interface CustomerCheckoutDetails {
   fullName: string;
   email: string;
@@ -140,13 +173,61 @@ export interface OrderSummary {
   tax: number;
   total: number;
   paymentMethod: PaymentMethod;
-  status: 'pending' | 'confirmed' | 'tailoring' | 'inspection' | 'dispatched' | 'delivered';
-  paymentStatus?: 'pending' | 'authorized' | 'captured' | 'paid' | 'failed' | 'refunded';
-  fulfillmentStatus?: 'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  status: string;
+  paymentStatus?: PaymentStatus;
+  fulfillmentStatus?: FulfillmentStatus;
   trackingNumber?: string;
   carrier?: string;
+  trackingUrl?: string;
   estimatedDelivery: string;
   deliveryNotes?: string;
+  cancellationReason?: string;
+  cancellationRequestedAt?: string;
+  cancelledAt?: string;
+  deliveredAt?: string;
+  adminNotes?: string;
+}
+
+export interface ReturnItemRecord {
+  id?: string;
+  returnId?: string;
+  orderItemId: string;
+  productName: string;
+  variantDescription?: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  condition?: string;
+  imageUrl?: string;
+}
+
+export interface ReturnRecord {
+  id: string;
+  orderId: string;
+  orderNumber: string;
+  customerId?: string | null;
+  returnNumber: string;
+  status: ReturnStatus;
+  reason: string;
+  customerNotes?: string;
+  adminNotes?: string;
+  refundAmount: number;
+  resolutionStatus: string;
+  items: ReturnItemRecord[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrderStatusHistoryEntry {
+  id?: string;
+  orderId: string;
+  orderNumber?: string;
+  previousStatus?: string;
+  newStatus: string;
+  statusType: 'fulfillment' | 'payment';
+  notes?: string;
+  changedBy?: string;
+  createdAt: string;
 }
 
 export interface CustomerProfile {

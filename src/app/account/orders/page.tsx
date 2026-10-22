@@ -13,19 +13,21 @@ import {
   ChevronUp,
   Loader2,
   ShoppingBag,
+  AlertCircle,
+  RotateCcw,
+  XCircle,
+  FileText,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { OrderSummary } from "@/types";
+import { OrderSummary, FulfillmentStatus, PaymentStatus } from "@/types";
 import { formatPrice } from "@/lib/utils";
-import { createClient as createBrowserSupabaseClient } from "@/utils/supabase/client";
+import { isOrderEligibleForCancellation, isOrderEligibleForReturn } from "@/lib/orderPolicyConfig";
 
 export default function OrdersPage() {
   const { user } = useAuth();
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedOrders, setExpandedOrders] = useState<Record<string, boolean>>({});
-
-  const supabase = createBrowserSupabaseClient();
 
   useEffect(() => {
     async function fetchOrders() {
@@ -35,45 +37,52 @@ export default function OrdersPage() {
       const combinedOrders: OrderSummary[] = [];
 
       try {
-        // 1. Fetch from Supabase orders table
-        const { data: dbOrders, error } = await supabase
-          .from("orders")
-          .select("*, order_items(*)")
-          .order("created_at", { ascending: false });
-
-        if (!error && dbOrders && dbOrders.length > 0) {
-          dbOrders.forEach((o: any) => {
-            combinedOrders.push({
-              orderId: o.id,
-              orderNumber: o.order_number,
-              createdAt: o.created_at,
-              customer: o.shipping_address || {},
-              items: (o.order_items || []).map((it: any) => ({
-                id: it.id,
-                productId: it.product_id || "",
-                productSlug: "",
-                name: it.product_name,
-                price: Number(it.unit_price),
-                image: it.image_url || "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?q=80&w=600",
-                size: it.size,
-                color: it.color,
-                quantity: it.quantity,
-                maxStock: 10,
-              })),
-              subtotal: Number(o.subtotal),
-              shipping: Number(o.shipping_fee),
-              discount: Number(o.discount_amount),
-              tax: Number(o.tax_amount),
-              total: Number(o.total_amount),
-              paymentMethod: o.payment_method || "upi",
-              status: o.fulfillment_status === "delivered" ? "delivered" : "confirmed",
-              trackingNumber: `BD-AIR-${o.order_number.replace(/\D/g, "").slice(0, 6) || "942180"}`,
-              estimatedDelivery: "2–3 business days via BlueDart Air",
+        // 1. Fetch authenticated orders via authoritative server endpoint
+        const res = await fetch("/api/orders");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && Array.isArray(data.orders)) {
+            data.orders.forEach((o: any) => {
+              combinedOrders.push({
+                orderId: o.id,
+                orderNumber: o.orderNumber,
+                createdAt: o.createdAt,
+                customer: o.shippingAddress || {},
+                items: (o.items || []).map((it: any) => ({
+                  id: it.id,
+                  productId: it.productId || "",
+                  productSlug: "",
+                  name: it.productName,
+                  price: Number(it.unitPrice),
+                  image: it.imageUrl || "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?q=80&w=600",
+                  size: it.size || (it.variantDescription?.split("•")[0]?.trim() || "M"),
+                  color: it.color || (it.variantDescription?.split("•")[1]?.trim() || "Espresso"),
+                  quantity: it.quantity,
+                  maxStock: 10,
+                })),
+                subtotal: Number(o.subtotal),
+                shipping: Number(o.shippingFee),
+                discount: Number(o.discountAmount),
+                tax: Number(o.taxAmount),
+                total: Number(o.totalAmount),
+                paymentMethod: o.paymentMethod || "upi",
+                status: o.fulfillmentStatus || "confirmed",
+                fulfillmentStatus: o.fulfillmentStatus,
+                paymentStatus: o.paymentStatus,
+                trackingNumber: o.trackingNumber,
+                carrier: o.carrier || "BlueDart Express Air",
+                trackingUrl: o.trackingUrl,
+                estimatedDelivery: o.estimatedDelivery || "2–3 business days via BlueDart Air",
+                cancellationReason: o.cancellationReason,
+                cancellationRequestedAt: o.cancellationRequestedAt,
+                cancelledAt: o.cancelledAt,
+                deliveredAt: o.deliveredAt,
+              });
             });
-          });
+          }
         }
       } catch (err) {
-        console.warn("Could not query orders table:", err);
+        console.warn("Could not query orders API:", err);
       }
 
       // 2. Also check sessionStorage for order placed in this active browser session
@@ -81,16 +90,44 @@ export default function OrdersPage() {
         const sessionOrder = sessionStorage.getItem("velure_latest_order");
         if (sessionOrder) {
           try {
-            const parsed: OrderSummary = JSON.parse(sessionOrder);
+            const parsed = JSON.parse(sessionOrder);
             if (!combinedOrders.some((o) => o.orderNumber === parsed.orderNumber)) {
-              combinedOrders.unshift(parsed);
+              combinedOrders.unshift({
+                orderId: parsed.id || parsed.orderId,
+                orderNumber: parsed.orderNumber,
+                createdAt: parsed.createdAt,
+                customer: parsed.shippingAddress || parsed.customer || {},
+                items: (parsed.items || []).map((it: any) => ({
+                  id: it.id,
+                  productId: it.productId || "",
+                  productSlug: "",
+                  name: it.productName || it.name,
+                  price: Number(it.unitPrice || it.price),
+                  image: it.imageUrl || it.image || "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?q=80&w=600",
+                  size: it.size || "M",
+                  color: it.color || "Espresso",
+                  quantity: it.quantity,
+                  maxStock: 10,
+                })),
+                subtotal: Number(parsed.subtotal),
+                shipping: Number(parsed.shippingFee || parsed.shipping || 0),
+                discount: Number(parsed.discountAmount || parsed.discount || 0),
+                tax: Number(parsed.taxAmount || parsed.tax || 0),
+                total: Number(parsed.totalAmount || parsed.total || 0),
+                paymentMethod: parsed.paymentMethod || "upi",
+                status: parsed.fulfillmentStatus || "confirmed",
+                fulfillmentStatus: parsed.fulfillmentStatus || "confirmed",
+                paymentStatus: parsed.paymentStatus || "pending",
+                trackingNumber: parsed.trackingNumber,
+                carrier: parsed.carrier || "BlueDart Express Air",
+                estimatedDelivery: parsed.estimatedDelivery || "2–3 business days via BlueDart Air",
+              });
             }
           } catch (e) {}
         }
       }
 
       setOrders(combinedOrders);
-      // Expand the first order by default
       if (combinedOrders.length > 0) {
         setExpandedOrders({ [combinedOrders[0].orderNumber]: true });
       }
@@ -98,7 +135,7 @@ export default function OrdersPage() {
     }
 
     fetchOrders();
-  }, [user, supabase]);
+  }, [user]);
 
   const toggleExpand = (orderNumber: string) => {
     setExpandedOrders((prev) => ({
@@ -107,28 +144,45 @@ export default function OrdersPage() {
     }));
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
+  const getFulfillmentBadge = (status?: string) => {
+    switch (status?.toLowerCase()) {
       case "delivered":
-        return {
-          label: "Delivered",
-          color: "bg-emerald-500/10 text-emerald-700 border-emerald-500/20",
-        };
+        return { label: "Delivered", color: "bg-emerald-500/10 text-emerald-800 border-emerald-500/30" };
       case "dispatched":
-        return {
-          label: "In Transit",
-          color: "bg-blue-500/10 text-blue-700 border-blue-500/20",
-        };
+      case "shipped":
+        return { label: "Dispatched • In Transit", color: "bg-sky-500/10 text-sky-800 border-sky-500/30" };
+      case "inspection":
+        return { label: "Quality Inspection", color: "bg-indigo-500/10 text-indigo-800 border-indigo-500/30" };
       case "tailoring":
-        return {
-          label: "In Atelier Tailoring",
-          color: "bg-purple-500/10 text-purple-700 border-purple-500/20",
-        };
+      case "processing":
+        return { label: "In Atelier Tailoring", color: "bg-purple-500/10 text-purple-800 border-purple-500/30" };
+      case "cancellation_requested":
+        return { label: "Cancellation Requested", color: "bg-amber-500/10 text-amber-800 border-amber-500/30" };
+      case "cancelled":
+        return { label: "Cancelled", color: "bg-neutral-500/10 text-neutral-600 border-neutral-500/30 line-through" };
+      case "return_requested":
+        return { label: "Return Under Review", color: "bg-amber-500/10 text-amber-800 border-amber-500/30" };
+      case "returned":
+        return { label: "Returned & Resolved", color: "bg-rose-500/10 text-rose-800 border-rose-500/30" };
+      case "confirmed":
       default:
-        return {
-          label: "Order Confirmed",
-          color: "bg-secondary/10 text-secondary border-secondary/20",
-        };
+        return { label: "Commission Confirmed", color: "bg-secondary/15 text-secondary border-secondary/30" };
+    }
+  };
+
+  const getPaymentBadge = (status?: string) => {
+    switch (status?.toLowerCase()) {
+      case "paid":
+      case "captured":
+        return { label: "Paid", color: "text-emerald-700 bg-emerald-50" };
+      case "failed":
+        return { label: "Payment Failed", color: "text-rose-700 bg-rose-50" };
+      case "refunded":
+        return { label: "Refunded", color: "text-purple-700 bg-purple-50" };
+      case "partially_refunded":
+        return { label: "Partial Refund", color: "text-purple-700 bg-purple-50" };
+      default:
+        return { label: "Payment Pending", color: "text-amber-700 bg-amber-50" };
     }
   };
 
@@ -139,13 +193,14 @@ export default function OrdersPage() {
           Commission History
         </h2>
         <p className="text-sm text-on-surface-variant mt-1">
-          Review your current and historical garment orders, tailoring progress, and priority air shipments.
+          Review your current and historical garment orders, tailoring milestones, air shipments, and return requests.
         </p>
       </div>
 
       {loading ? (
-        <div className="py-12 flex justify-center">
+        <div className="py-16 flex flex-col items-center justify-center gap-3">
           <Loader2 className="w-6 h-6 animate-spin text-primary" />
+          <p className="text-xs text-on-surface-variant">Retrieving your atelier records...</p>
         </div>
       ) : orders.length === 0 ? (
         <div className="bg-surface-container-lowest border border-outline-variant/40 rounded-2xl p-12 text-center text-on-surface-variant">
@@ -168,7 +223,11 @@ export default function OrdersPage() {
         <div className="space-y-4">
           {orders.map((order) => {
             const isExpanded = expandedOrders[order.orderNumber];
-            const badge = getStatusBadge(order.status);
+            const fBadge = getFulfillmentBadge(order.fulfillmentStatus);
+            const pBadge = getPaymentBadge(order.paymentStatus);
+            const canCancel = isOrderEligibleForCancellation(order).eligible;
+            const canReturn = isOrderEligibleForReturn(order).eligible;
+
             return (
               <div
                 key={order.orderNumber}
@@ -204,13 +263,17 @@ export default function OrdersPage() {
                         {formatPrice(order.total)}
                       </strong>
                     </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${pBadge.color}`}>
+                        {pBadge.label}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-3 self-end md:self-auto">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-semibold border ${badge.color}`}
-                    >
-                      {badge.label}
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${fBadge.color}`}>
+                      {fBadge.label}
                     </span>
                     <button
                       type="button"
@@ -238,18 +301,35 @@ export default function OrdersPage() {
                             Priority Air Delivery • {order.estimatedDelivery}
                           </p>
                           <p className="text-on-surface-variant mt-0.5">
-                            AWB Tracking:{" "}
+                            Carrier: <strong className="text-primary">{order.carrier}</strong> • AWB:{" "}
                             <span className="font-mono font-medium text-primary">
-                              {order.trackingNumber}
+                              {order.trackingNumber || "Assigning in atelier"}
                             </span>
                           </p>
                         </div>
                       </div>
 
-                      <span className="text-secondary font-semibold hover:underline cursor-pointer flex items-center gap-1 self-start sm:self-auto">
-                        <span>Live Courier Tracking</span>
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </span>
+                      <div className="flex items-center gap-4">
+                        {order.trackingUrl ? (
+                          <a
+                            href={order.trackingUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-secondary font-semibold hover:underline flex items-center gap-1"
+                          >
+                            <span>Live Courier Tracking</span>
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        ) : null}
+
+                        <Link
+                          href={`/account/orders/${encodeURIComponent(order.orderNumber)}`}
+                          className="inline-flex items-center gap-1 text-primary hover:text-secondary font-semibold transition-colors"
+                        >
+                          <span>Full Commission Details</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </Link>
+                      </div>
                     </div>
 
                     {/* Garments List */}
@@ -321,10 +401,35 @@ export default function OrdersPage() {
                           <span>{formatPrice(order.tax)}</span>
                         </div>
                         <div className="flex justify-between md:justify-end gap-6 font-semibold text-sm text-primary pt-1 border-t border-outline-variant/30">
-                          <span>Total Paid ({order.paymentMethod.toUpperCase()}):</span>
+                          <span>Total ({order.paymentMethod.toUpperCase()}):</span>
                           <span>{formatPrice(order.total)}</span>
                         </div>
                       </div>
+                    </div>
+
+                    {/* Quick Action Link to Detail Page */}
+                    <div className="pt-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-xs">
+                        {canCancel && (
+                          <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded text-[11px] font-medium">
+                            Eligible for cancellation
+                          </span>
+                        )}
+                        {canReturn && (
+                          <span className="text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded text-[11px] font-medium">
+                            Eligible for complimentary return
+                          </span>
+                        )}
+                      </div>
+
+                      <Link
+                        href={`/account/orders/${encodeURIComponent(order.orderNumber)}`}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-surface-container hover:bg-surface-container-high text-primary font-semibold text-xs transition-colors shadow-2xs"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        <span>Inspect Timeline &amp; Requests</span>
+                        <ArrowRight className="w-3 h-3 ml-0.5" />
+                      </Link>
                     </div>
                   </div>
                 )}
