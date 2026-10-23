@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "node tests/product-service.test.mjs && node tests/cart-wishlist.test.mjs && node tests/checkout-order.test.mjs && node tests/payment-integration.test.mjs && node tests/availability-inventory.test.mjs && node tests/order-lifecycle.test.mjs && node tests/admin-dashboard.test.mjs && node tests/shipping-notifications.test.mjs && node tests/e2e-scenarios.test.mjs && node tests/admin-dashboard-v2.test.mjs"
+    "test": "node tests/product-service.test.mjs && node tests/cart-wishlist.test.mjs && node tests/checkout-order.test.mjs && node tests/payment-integration.test.mjs && node tests/availability-inventory.test.mjs && node tests/order-lifecycle.test.mjs && node tests/admin-dashboard.test.mjs && node tests/shipping-notifications.test.mjs && node tests/e2e-scenarios.test.mjs && node tests/admin-dashboard-v2.test.mjs && node tests/admin-access-dual-persona.test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

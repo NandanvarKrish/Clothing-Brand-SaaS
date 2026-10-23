@@ -112,10 +112,11 @@ export async function getAdminSession(): Promise<AdminAuthResult> {
 
     // 3. Fallback to server-side email whitelist
     if (isWhitelistedAdminEmail(user.email)) {
+      const isOwner = user.email?.toLowerCase().trim() === "nandanvarkrish@gmail.com";
       return {
         authorized: true,
         user,
-        role: "admin",
+        role: isOwner ? "owner" : "admin",
       };
     }
 

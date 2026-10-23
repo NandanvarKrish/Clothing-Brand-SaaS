@@ -13,7 +13,7 @@ export function Header() {
   const pathname = usePathname();
   const { itemCount: cartCount, openCart } = useCart();
   const { itemCount: wishlistCount } = useWishlist();
-  const { user, profile } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -87,6 +87,17 @@ export function Header() {
 
         {/* Header Action Icons */}
         <div className="flex items-center gap-4 sm:gap-5">
+          {/* Atelier Studio Link for Store Administrator */}
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className="hidden md:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary/15 border border-secondary/30 text-secondary text-xs uppercase tracking-wider font-semibold hover:bg-secondary/25 transition-colors shadow-2xs"
+              title="Enter Atelier Command Studio"
+            >
+              <span>Studio</span>
+            </Link>
+          )}
+
           {/* Search Trigger */}
           <button
             type="button"
@@ -215,6 +226,18 @@ export function Header() {
             >
               {user ? `Account (${profile?.fullName || "Patron"})` : "Sign In / Register"}
             </Link>
+            {isAdmin && (
+              <Link
+                href="/admin"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="py-2 px-3 rounded-lg font-title-md text-title-md text-secondary bg-surface-container font-semibold transition-colors flex items-center justify-between"
+              >
+                <span>Atelier Studio</span>
+                <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-primary text-on-primary">
+                  Admin
+                </span>
+              </Link>
+            )}
           </nav>
           <div className="pt-4 border-t border-outline-variant/30 flex items-center justify-between text-body-sm text-on-surface-variant">
             <span>India (INR ₹)</span>

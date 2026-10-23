@@ -9,6 +9,7 @@ interface AuthContextType {
   user: User | null;
   profile: CustomerProfile | null;
   loading: boolean;
+  isAdmin: boolean;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
   resendVerificationEmail: () => Promise<{ success: boolean; error?: string }>;
@@ -134,12 +135,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const isAdmin = Boolean(
+    user &&
+      (user.app_metadata?.role === "owner" ||
+        user.app_metadata?.role === "admin" ||
+        user.user_metadata?.role === "owner" ||
+        user.user_metadata?.role === "admin" ||
+        user.email?.toLowerCase().trim() === "nandanvarkrish@gmail.com")
+  );
+
   return (
     <AuthContext.Provider
       value={{
         user,
         profile,
         loading,
+        isAdmin,
         signOut,
         refreshUser,
         resendVerificationEmail,

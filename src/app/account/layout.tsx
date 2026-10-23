@@ -19,7 +19,7 @@ import { useAuth } from "@/context/AuthContext";
 
 export default function AccountLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { user, profile, loading, signOut, resendVerificationEmail } = useAuth();
+  const { user, profile, loading, isAdmin, signOut, resendVerificationEmail } = useAuth();
   const [resendStatus, setResendStatus] = useState<string | null>(null);
   const [isResending, setIsResending] = useState(false);
 
@@ -105,14 +105,27 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={signOut}
-          className="self-start md:self-auto inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-outline-variant/60 text-sm font-semibold text-on-surface-variant hover:text-error hover:border-error/40 hover:bg-error/5 transition-all shadow-sm"
-        >
-          <LogOut className="w-4 h-4" />
-          <span>Sign Out</span>
-        </button>
+        <div className="flex items-center gap-3 self-start md:self-auto">
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-on-primary text-sm font-semibold hover:bg-primary-container transition-all shadow-sm"
+              title="Enter Atelier Command Studio"
+            >
+              <Sparkles className="w-4 h-4 text-secondary" />
+              <span>Atelier Studio</span>
+            </Link>
+          )}
+
+          <button
+            type="button"
+            onClick={signOut}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-outline-variant/60 text-sm font-semibold text-on-surface-variant hover:text-error hover:border-error/40 hover:bg-error/5 transition-all shadow-sm"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Sign Out</span>
+          </button>
+        </div>
       </div>
 
       {/* Navigation Tabs */}
