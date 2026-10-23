@@ -87,10 +87,11 @@ export async function GET(
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      order,
-    });
+    // Reject unauthorized access to guest order details
+    return NextResponse.json(
+      { success: false, error: "Access denied: Patron verification required." },
+      { status: 403 }
+    );
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message || "Failed to fetch order" },

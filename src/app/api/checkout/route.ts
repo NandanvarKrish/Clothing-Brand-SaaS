@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createOrder, OrderCreateInput } from "@/services/orderService";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,18 @@ export async function POST(request: NextRequest) {
       request.headers.get("idempotency-key") ||
       body.idempotencyKey ||
       undefined;
+
+    // Authoritatively resolve customerId from verified session to prevent impersonation
+    let verifiedCustomerId: string | undefined = undefined;
+    const supabase = await createServerClient();
+    if (supabase) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        verifiedCustomerId = user.id;
+      }
+    }
 
     const {
       items,
@@ -28,7 +41,7 @@ export async function POST(request: NextRequest) {
     // Build authoritative order input
     const orderInput: OrderCreateInput = {
       idempotencyKey,
-      customerId: customerId || undefined,
+      customerId: verifiedCustomerId,
       guestEmail: customer?.email || undefined,
       items: Array.isArray(items) ? items : [],
       shippingAddress: shippingAddress || {

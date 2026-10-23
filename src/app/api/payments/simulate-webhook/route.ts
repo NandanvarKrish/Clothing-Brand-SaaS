@@ -11,7 +11,8 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(request: NextRequest) {
   try {
-    if (process.env.NODE_ENV === 'production' && process.env.ALLOW_TEST_PAYMENTS !== 'true') {
+    // Strictly block simulated webhooks in production environments unconditionally
+    if (process.env.NODE_ENV === 'production') {
       return NextResponse.json(
         { success: false, error: 'Simulated webhooks are strictly disabled in production.' },
         { status: 403 }

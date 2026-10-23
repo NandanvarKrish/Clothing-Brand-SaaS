@@ -5,7 +5,9 @@ import { createServerClient } from "@supabase/ssr";
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/account";
+  const rawNext = searchParams.get("next") ?? "/account";
+  // Strict sanitization: ensure redirect target is an internal path, not an external URL or protocol-relative URI
+  const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/account";
 
   if (code) {
     const cookieStore = cookies();

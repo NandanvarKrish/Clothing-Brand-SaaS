@@ -7,10 +7,13 @@ import { confirmShipmentDelivery } from "@/services/shipping/shippingService";
  * Validates inbound carrier tracking webhook HMAC-SHA256 signature.
  */
 function verifyCarrierSignature(rawBody: string, signatureHeader?: string | null): boolean {
-  const secret =
-    process.env.SHIPPING_WEBHOOK_SECRET ||
-    process.env.MOCK_WEBHOOK_SECRET ||
-    "atelier_default_shipping_webhook_secret_key_32c";
+  let secret = process.env.SHIPPING_WEBHOOK_SECRET || process.env.MOCK_WEBHOOK_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      return false; // In production, an explicit webhook secret is strictly required
+    }
+    secret = "atelier_default_shipping_webhook_secret_key_32c";
+  }
 
   if (!signatureHeader) return false;
 

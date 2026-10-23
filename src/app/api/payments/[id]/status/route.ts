@@ -12,13 +12,9 @@ export async function GET(
     const id = params.id;
     const providerId = request.nextUrl.searchParams.get('provider') || undefined;
 
-    // Check if id is an order number (e.g. VEL-2024-XXXX)
-    if (id.startsWith('VEL-')) {
-      const order = await getOrderByNumber(id);
-      if (!order) {
-        return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 });
-      }
-
+    // Check if id matches an internal order number
+    const order = await getOrderByNumber(id);
+    if (order) {
       return NextResponse.json({
         success: true,
         orderNumber: order.orderNumber,
