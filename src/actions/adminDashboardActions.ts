@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { assertAdminUser } from "@/lib/adminAuth";
+import { assertAdminUser, getAdminSession } from "@/lib/adminAuth";
 import {
   getAdminAnalytics,
   AnalyticsSummary,
@@ -178,5 +178,32 @@ export async function updateStoreSettingsAction(updates: Partial<StoreSettingsDa
     return result;
   } catch (err: any) {
     return { success: false, error: err.message || "Unauthorized" };
+  }
+}
+
+/**
+ * Server action to verify administrator session authorization.
+ * Used by AdminLayout to eliminate client-side email inspection.
+ */
+export async function verifyAdminAccessAction(): Promise<{
+  authorized: boolean;
+  user: { id: string; email?: string; role?: string } | null;
+  error?: string;
+}> {
+  try {
+    const auth = await getAdminSession();
+    if (!auth.authorized || !auth.user) {
+      return { authorized: false, user: null, error: auth.error || "Unauthorized" };
+    }
+    return {
+      authorized: true,
+      user: {
+        id: auth.user.id,
+        email: auth.user.email,
+        role: auth.role || "admin",
+      },
+    };
+  } catch (err: any) {
+    return { authorized: false, user: null, error: err.message || "Failed to authenticate session" };
   }
 }

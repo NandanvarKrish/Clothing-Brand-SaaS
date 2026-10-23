@@ -17,17 +17,22 @@ import {
   Sparkles,
   ShieldAlert,
   Loader2,
+  TrendingUp,
+  RotateCcw,
   LogOut,
   ChevronRight,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { verifyAdminAccessAction } from "@/actions/adminDashboardActions";
 
 const navItems = [
   { name: "Overview", href: "/admin", icon: LayoutDashboard },
+  { name: "Commissions & Orders", href: "/admin/orders", icon: FileText },
   { name: "Garments & Catalog", href: "/admin/products", icon: Layers },
   { name: "Inventory Desk", href: "/admin/inventory", icon: Boxes },
-  { name: "Commissions & Orders", href: "/admin/orders", icon: FileText },
   { name: "Patrons & Clients", href: "/admin/customers", icon: Users },
+  { name: "Executive Analytics", href: "/admin/analytics", icon: TrendingUp },
+  { name: "Returns & Refunds", href: "/admin/returns", icon: RotateCcw },
   { name: "Promotions & Discounts", href: "/admin/discounts", icon: Percent },
   { name: "Atelier Settings", href: "/admin/settings", icon: Settings },
 ];
@@ -38,6 +43,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const { user, loading, signOut } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
+  const [serverUser, setServerUser] = useState<{ id: string; email?: string; role?: string } | null>(null);
 
   useEffect(() => {
     if (loading) return;
@@ -47,24 +53,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       return;
     }
 
-    // Role validation
-    const appRole = (user as any).app_metadata?.role;
-    const userRole = user.user_metadata?.role;
-    const email = user.email?.toLowerCase() || "";
-
-    const isAdmin =
-      appRole === "admin" ||
-      appRole === "owner" ||
-      userRole === "admin" ||
-      userRole === "owner" ||
-      email.startsWith("admin@") ||
-      email.includes("+admin@") ||
-      email.endsWith("@velure.atelier") ||
-      email === "concierge@velureatelier.com" ||
-      email === "staff@velureatelier.com" ||
-      process.env.NODE_ENV === "development"; // Permissive in dev mode for testing
-
-    setIsAuthorized(isAdmin);
+    // Authoritative server-side authorization check (eliminates browser-side email inspection)
+    verifyAdminAccessAction()
+      .then((res) => {
+        setIsAuthorized(res.authorized);
+        if (res.user) {
+          setServerUser(res.user);
+        }
+      })
+      .catch(() => {
+        setIsAuthorized(false);
+      });
   }, [user, loading]);
 
   if (loading || isAuthorized === null) {
@@ -203,11 +202,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 {user?.user_metadata?.full_name || "Atelier Director"}
               </p>
               <p className="text-[11px] text-on-surface-variant truncate">
-                {user?.email || "staff@velure.atelier"}
+                {serverUser?.email || user?.email || "staff@velure.atelier"}
               </p>
             </div>
-            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-surface-container-high text-secondary">
-              Staff
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-surface-container-high text-secondary capitalize">
+              {serverUser?.role || "Staff"}
             </span>
           </div>
 

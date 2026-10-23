@@ -37,6 +37,8 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [paymentFilter, setPaymentFilter] = useState("all");
+  const [dateRangeFilter, setDateRangeFilter] = useState("all");
   const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   // Detail & Action Modals State
@@ -60,9 +62,23 @@ export default function AdminOrdersPage() {
   const loadOrders = useCallback(async () => {
     setLoading(true);
     try {
+      let startDate: string | undefined = undefined;
+      const now = Date.now();
+      if (dateRangeFilter === "today") {
+        startDate = new Date(now - 24 * 60 * 60 * 1000).toISOString();
+      } else if (dateRangeFilter === "7d") {
+        startDate = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
+      } else if (dateRangeFilter === "30d") {
+        startDate = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
+      } else if (dateRangeFilter === "90d") {
+        startDate = new Date(now - 90 * 24 * 60 * 60 * 1000).toISOString();
+      }
+
       const result = await getAllOrders({
         query: searchQuery,
         fulfillmentStatus: statusFilter === "all" ? undefined : statusFilter,
+        paymentStatus: paymentFilter === "all" ? undefined : paymentFilter,
+        startDate,
       });
       setOrders(result.orders);
     } catch (err: any) {
@@ -70,7 +86,7 @@ export default function AdminOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, statusFilter]);
+  }, [searchQuery, statusFilter, paymentFilter, dateRangeFilter]);
 
   useEffect(() => {
     loadOrders();
@@ -304,6 +320,57 @@ export default function AdminOrdersPage() {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Secondary Quick Filters: Payment Status & Time Window */}
+      <div className="flex items-center gap-3 mb-6 pb-4 border-b border-outline-variant/30 text-xs flex-wrap">
+        <span className="text-[11px] uppercase tracking-wider text-on-surface-variant font-semibold">
+          Filters:
+        </span>
+        <div className="flex items-center gap-2">
+          <label className="text-on-surface-variant text-[11px]">Payment:</label>
+          <select
+            value={paymentFilter}
+            onChange={(e) => setPaymentFilter(e.target.value)}
+            className="py-1 px-2.5 rounded-lg bg-surface-container-low border border-outline-variant/40 text-xs text-primary focus:outline-none focus:border-primary"
+          >
+            <option value="all">All Payments</option>
+            <option value="paid">Verified Paid</option>
+            <option value="pending">Pending Gateway</option>
+            <option value="refunded">Refunded</option>
+            <option value="failed">Failed / Expired</option>
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label className="text-on-surface-variant text-[11px]">Time Window:</label>
+          <select
+            value={dateRangeFilter}
+            onChange={(e) => setDateRangeFilter(e.target.value)}
+            className="py-1 px-2.5 rounded-lg bg-surface-container-low border border-outline-variant/40 text-xs text-primary focus:outline-none focus:border-primary"
+          >
+            <option value="all">All History</option>
+            <option value="today">Past 24 Hours</option>
+            <option value="7d">Past 7 Days</option>
+            <option value="30d">Past 30 Days</option>
+            <option value="90d">Past 90 Days</option>
+          </select>
+        </div>
+
+        {(paymentFilter !== "all" || dateRangeFilter !== "all" || statusFilter !== "all" || searchQuery) && (
+          <button
+            type="button"
+            onClick={() => {
+              setPaymentFilter("all");
+              setDateRangeFilter("all");
+              setStatusFilter("all");
+              setSearchQuery("");
+            }}
+            className="text-[11px] text-secondary hover:text-primary font-semibold underline ml-auto"
+          >
+            Reset Filters
+          </button>
+        )}
       </div>
 
       {/* Orders Table */}

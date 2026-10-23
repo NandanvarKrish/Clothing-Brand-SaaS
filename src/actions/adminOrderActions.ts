@@ -1,33 +1,21 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient as createServerClient } from "@/lib/supabase/server";
+import { assertAdminUser } from "@/lib/adminAuth";
 import {
   updateOrderFulfillment,
   reviewOrderCancellation,
   OrderRecord,
 } from "@/services/orderService";
-import { reviewReturnRequest, ReviewReturnInput } from "@/services/returnService";
+import { reviewReturnRequest, ReviewReturnInput, getAllReturns } from "@/services/returnService";
 import { FulfillmentStatus } from "@/types";
 
 /**
  * Asserts that the current session is authenticated for administrative operations.
  */
 async function assertAdminSession() {
-  const supabase = await createServerClient();
-  if (!supabase) {
-    throw new Error("Server database connection unavailable.");
-  }
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("Unauthorized: You must be logged in to access atelier management.");
-  }
-
-  return { user, supabase };
+  const { user, role } = await assertAdminUser();
+  return { user, role };
 }
 
 /**
@@ -96,8 +84,18 @@ export async function reviewReturnRequestAction(input: {
 
   if (result.success) {
     revalidatePath("/admin/orders");
+    revalidatePath("/admin/returns");
     revalidatePath("/account/orders");
   }
 
   return result;
+}
+
+/**
+ * Admin action: fetches all return requests for administrative review.
+ */
+export async function getAllReturnsAction() {
+  await assertAdminSession();
+  const returns = await getAllReturns();
+  return { success: true, returns };
 }

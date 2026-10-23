@@ -251,6 +251,59 @@ export async function getReturnsForOrder(orderId: string): Promise<ReturnRecord[
 }
 
 /**
+ * Retrieves all return requests across all orders for administrative review.
+ */
+export async function getAllReturns(): Promise<ReturnRecord[]> {
+  const supabase = getSupabase();
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from("returns")
+        .select(`
+          id, order_id, customer_id, return_number, status, reason,
+          customer_notes, admin_notes, refund_amount, resolution_status,
+          created_at, updated_at,
+          return_items (
+            id, order_item_id, quantity, condition
+          )
+        `)
+        .order("created_at", { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        return data.map((r: any) => ({
+          id: r.id,
+          orderId: r.order_id,
+          orderNumber: "",
+          customerId: r.customer_id,
+          returnNumber: r.return_number,
+          status: r.status as ReturnStatus,
+          reason: r.reason,
+          customerNotes: r.customer_notes,
+          adminNotes: r.admin_notes,
+          refundAmount: Number(r.refund_amount || 0),
+          resolutionStatus: r.resolution_status || "pending",
+          items: (r.return_items || []).map((it: any) => ({
+            id: it.id,
+            returnId: r.id,
+            orderItemId: it.order_item_id,
+            productName: "Garment Return",
+            quantity: Number(it.quantity),
+            unitPrice: 0,
+            lineTotal: 0,
+            condition: it.condition,
+          })),
+          createdAt: r.created_at,
+          updatedAt: r.updated_at,
+        }));
+      }
+    } catch {}
+  }
+
+  // Memory fallback
+  return Array.from(globalReturns.values());
+}
+
+/**
  * Reviews a return request (admin decision: approved or rejected).
  */
 export async function reviewReturnRequest(

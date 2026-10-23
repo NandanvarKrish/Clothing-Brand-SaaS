@@ -12,6 +12,7 @@ import {
   Users,
   DollarSign,
   ArrowUpRight,
+  ArrowDownRight,
   RotateCcw,
   Sparkles,
   Loader2,
@@ -140,9 +141,19 @@ export default function AdminOverviewPage() {
               <p className="font-serif text-3xl font-medium text-primary">
                 {formatPrice(data.grossSales)}
               </p>
-              <p className="text-[11px] text-on-surface-variant mt-2">
-                Paid transactions excluding uncaptured attempts
-              </p>
+              <div className="flex items-center justify-between mt-2 text-[11px]">
+                <span className={`inline-flex items-center gap-0.5 font-semibold ${
+                  data.comparison?.grossSalesDeltaPercent >= 0 ? "text-emerald-700" : "text-rose-700"
+                }`}>
+                  {data.comparison?.grossSalesDeltaPercent >= 0 ? (
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  ) : (
+                    <ArrowDownRight className="w-3.5 h-3.5" />
+                  )}
+                  {Math.abs(data.comparison?.grossSalesDeltaPercent || 0)}% vs prior
+                </span>
+                <span className="text-on-surface-variant/70 text-[10px]">Paid only</span>
+              </div>
             </div>
 
             {/* Net Sales */}
@@ -158,9 +169,47 @@ export default function AdminOverviewPage() {
               <p className="font-serif text-3xl font-medium text-primary">
                 {formatPrice(data.netSales)}
               </p>
-              <p className="text-[11px] text-on-surface-variant mt-2">
-                Gross sales minus ₹{data.refundsTotal.toLocaleString("en-IN")} in refunds
+              <div className="flex items-center justify-between mt-2 text-[11px]">
+                <span className={`inline-flex items-center gap-0.5 font-semibold ${
+                  data.comparison?.netSalesDeltaPercent >= 0 ? "text-emerald-700" : "text-rose-700"
+                }`}>
+                  {data.comparison?.netSalesDeltaPercent >= 0 ? (
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  ) : (
+                    <ArrowDownRight className="w-3.5 h-3.5" />
+                  )}
+                  {Math.abs(data.comparison?.netSalesDeltaPercent || 0)}% vs prior
+                </span>
+                <span className="text-on-surface-variant/70 text-[10px]">After refunds</span>
+              </div>
+            </div>
+
+            {/* Average Order Value (AOV) */}
+            <div className="p-6 rounded-xl bg-surface-container-lowest border border-outline-variant/40 shadow-xs">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs uppercase tracking-wider text-on-surface-variant font-semibold">
+                  Avg. Order Value
+                </span>
+                <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center">
+                  <Layers className="w-4 h-4" />
+                </div>
+              </div>
+              <p className="font-serif text-3xl font-medium text-primary">
+                {formatPrice(data.averageOrderValue || 0)}
               </p>
+              <div className="flex items-center justify-between mt-2 text-[11px]">
+                <span className={`inline-flex items-center gap-0.5 font-semibold ${
+                  (data.comparison?.aovDeltaPercent || 0) >= 0 ? "text-emerald-700" : "text-rose-700"
+                }`}>
+                  {(data.comparison?.aovDeltaPercent || 0) >= 0 ? (
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  ) : (
+                    <ArrowDownRight className="w-3.5 h-3.5" />
+                  )}
+                  {Math.abs(data.comparison?.aovDeltaPercent || 0)}% vs prior
+                </span>
+                <span className="text-on-surface-variant/70 text-[10px]">Per order</span>
+              </div>
             </div>
 
             {/* Total Orders */}
@@ -176,27 +225,19 @@ export default function AdminOverviewPage() {
               <p className="font-serif text-3xl font-medium text-primary">
                 {data.totalOrders}
               </p>
-              <p className="text-[11px] text-on-surface-variant mt-2">
-                Total commissions recorded in selected timeframe
-              </p>
-            </div>
-
-            {/* Active Catalog */}
-            <div className="p-6 rounded-xl bg-surface-container-lowest border border-outline-variant/40 shadow-xs">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs uppercase tracking-wider text-on-surface-variant font-semibold">
-                  Active Garments
+              <div className="flex items-center justify-between mt-2 text-[11px]">
+                <span className={`inline-flex items-center gap-0.5 font-semibold ${
+                  (data.comparison?.totalOrdersDeltaPercent || 0) >= 0 ? "text-emerald-700" : "text-rose-700"
+                }`}>
+                  {(data.comparison?.totalOrdersDeltaPercent || 0) >= 0 ? (
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  ) : (
+                    <ArrowDownRight className="w-3.5 h-3.5" />
+                  )}
+                  {Math.abs(data.comparison?.totalOrdersDeltaPercent || 0)}% vs prior
                 </span>
-                <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center">
-                  <Layers className="w-4 h-4" />
-                </div>
+                <span className="text-on-surface-variant/70 text-[10px]">Selected period</span>
               </div>
-              <p className="font-serif text-3xl font-medium text-primary">
-                {data.activeProducts}
-              </p>
-              <p className="text-[11px] text-on-surface-variant mt-2">
-                Published bespoke apparel pieces in storefront
-              </p>
             </div>
           </div>
 
@@ -272,9 +313,19 @@ export default function AdminOverviewPage() {
                   Daily revenue trajectory across the active {rangeDays === 0 ? "lifetime" : `${rangeDays}-day`} window
                 </p>
               </div>
-              <span className="text-xs font-semibold text-secondary uppercase tracking-widest">
-                INR (₹) Sales
-              </span>
+              <div className="flex items-center gap-3">
+                <Link
+                  href="/admin/analytics"
+                  className="px-3 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-primary text-xs font-semibold inline-flex items-center gap-1.5 transition-colors"
+                >
+                  <TrendingUp className="w-3.5 h-3.5 text-secondary" />
+                  <span>Executive Analytics</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </Link>
+                <span className="text-xs font-semibold text-secondary uppercase tracking-widest hidden sm:inline">
+                  INR (₹) Sales
+                </span>
+              </div>
             </div>
 
             {/* Bar Chart Representation */}

@@ -25,6 +25,16 @@ function isWhitelistedAdminEmail(email?: string): boolean {
     return true;
   }
 
+  // Designated store owner administrator account
+  if (cleanEmail === "nandanvarkrish@gmail.com") {
+    return true;
+  }
+
+  // In production, heuristic email patterns are strictly disabled
+  if (process.env.NODE_ENV === "production") {
+    return false;
+  }
+
   // Common atelier concierge emails in dev/test
   if (
     cleanEmail.startsWith("admin@") ||
